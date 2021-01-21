@@ -179,7 +179,8 @@ m_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
 
 
 stargazer(summary(m_white)$coef, type = "text")
@@ -210,7 +211,8 @@ m_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_6
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
 
 stargazer(summary(m_latinx)$coeff, type = "text")
 
@@ -224,7 +226,8 @@ m_asian <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vr
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
 
 stargazer(summary(m_asian)$coeff, type = "text")
 
@@ -304,31 +307,36 @@ for(i in 1:20){
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = dat_long)
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long)
   
   mod_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
   
   mod_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
   
   mod_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
   
   mod_asian <- lmerTest::lmer(cognitive_score ~ int_score + int_score:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
                        # the line below has the uncentered income variable
                        # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
                        #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
   
   
   imp_coefs[[i]] <- summary(mod)$coef[2,1]
