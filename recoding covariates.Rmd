@@ -18,7 +18,9 @@ library(mice)
 library(tableone)
 library(RColorBrewer)
 
-khandle <- read_sas("/Users/ccalmasini/Desktop/Camilla KHANDLE/Datasets/khandle_baseline_20201029.sas7bdat")
+# khandle <- read_sas("/Users/ccalmasini/Desktop/Camilla KHANDLE/Datasets/khandle_baseline_20201029.sas7bdat")
+
+khandle <- read_sas("../../Dropbox/KHANDLE/Raw KHANDLE Data/Most Recent Raw Data Sets/archive/29Oct2020/khandle_baseline_20201029.sas7bdat")
 ```
 
 Selecting variables, standardizing W1_SENAS_exec, W1_SENAS_vrmem, W1_SENAS_sem and removing people who have missing values in those measures.
@@ -120,6 +122,7 @@ dat %>%
   mutate(total = rowSums(select(., -1)))
 ```
 
+
 # Recoding covariates  
 1. Income: Income was turned into a continuous variable using the upper bound for the category of W1_INCOME_RANGE (rounded up by 1, ie if upper bound was 9999, turn into 10000). If W1_INCOME_RANGE was missing, the most common value based on the binary W1_INCOME_EST category was assigned.
 
@@ -205,12 +208,17 @@ ADL <- dat %>%
          ADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
          ADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
          ADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
-         ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA)) %>%
+         # The line below is incorrect - should be W1_DAILY_LIVING_ADL9 instead of W1_DAILY_LIVING_ADL2
+         # Fortnately, all participants incorrectly coded (n = 9) were missing at least one other ADL, so the ADL variable wasn't affected
+         # I've commented out the incorrect line and corrected it below, but there should be no change to the results
+         # ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA), #) %>%
+         # Corrected line
+         ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA)) %>%
   rowwise() %>%
   mutate(n_miss = sum(is.na(ADL1), is.na(ADL2), is.na(ADL3), is.na(ADL4), is.na(ADL5), is.na(ADL6), is.na(ADL7), is.na(ADL8), is.na(ADL9)),
          ADL = ifelse(n_miss == 0, sum(ADL1, ADL2, ADL3, ADL4, ADL5, ADL6, ADL7, ADL8, ADL9, na.rm = TRUE)/9, NA)) %>%
   select(STUDYID, ADL)
-         
+
 
 IADL <- dat %>%
   select(STUDYID, starts_with("W1_DAILY_LIVING_IADL")) %>%
@@ -233,7 +241,10 @@ ADL_IADL <- dat %>%
          ADL_IADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
          ADL_IADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
          ADL_IADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
-         ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA),
+         # same error as above - will comment out incorrect line and correct below
+         # still has no effect on ADL_IADL calculation
+         # ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA),
+         ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA),
          ADL_IADL10 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
          ADL_IADL11 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
          ADL_IADL12 = ifelse(W1_DAILY_LIVING_IADL3 >= 1 & W1_DAILY_LIVING_IADL3 <= 4, W1_DAILY_LIVING_IADL3, NA)) %>%

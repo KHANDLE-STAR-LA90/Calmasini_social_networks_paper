@@ -9,6 +9,7 @@ This Rmd does all the mixed models using the data from recoding covariates.Rmd
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 ```{r make table}
 #function to make table of coefficients
 make_table <- function(model){
@@ -28,7 +29,9 @@ make_table <- function(model){
 
 # Datasets
 ```{r datasets}
-final_dat <- read.csv("/Users/ccalmasini/Desktop/Camilla KHANDLE/Social nets paper code/social_nets_dat.csv")
+# final_dat <- read.csv("/Users/ccalmasini/Desktop/Camilla KHANDLE/Social nets paper code/social_nets_dat.csv")
+final_dat <- read.csv("social_nets_dat.csv")
+
 
 #centering education at 12 and age at 65
 #turning variables into factors
@@ -149,11 +152,19 @@ table_main_covs <- cbind('label' = c("Main covars - overall", "Main covars - whi
 ```
 
 # Adding other covariates (drinks, income, adl_iadl)
+
+You used the non-centered income_num variable in these models, which is producing the warning, "Some predictor variables are on very different scales: consider rescaling."
+
+Using the scaled version only changes the estimated intercept and the beta/CIs for the income variable. It does not change the betas or confidence intervals for the int_score, so everything is fine, but using the scaled variable will get rid of the warning.
+
 ## Overall
 ```{r overall & all covs}
 #this is overall model also including other covariates
 m2 <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID), 
                        REML = FALSE, data = khandle1_long)
 
 stargazer(summary(m2)$coeff, type = "text")
@@ -165,7 +176,10 @@ table2 <- make_table(m2)
 ```{r white}
 #model stratified for white + table for white
 m_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
 
 
@@ -179,7 +193,10 @@ table_white
 ```{r black}
 #model stratified for black + table for black
 m_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID), 
                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
 
 stargazer(summary(m_black)$coeff, type = "text")
@@ -191,7 +208,10 @@ table_black <- make_table(m_black)
 ```{r latinx}
 #model stratified for latino + table for latino
 m_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
 
 stargazer(summary(m_latinx)$coeff, type = "text")
@@ -203,7 +223,10 @@ table_latinx <- make_table(m_latinx)
 ```{r asian}
 #model stratified for Asian + table for asian
 m_asian <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
 
 stargazer(summary(m_asian)$coeff, type = "text")
@@ -223,6 +246,8 @@ table_overall$label <- c("Overall", "White", "Black", "Latinx", "Asian")
 ```
 
 ## Imputing
+
+These models also use the unscaled income variable. Could change to remove error message, but not important for calculation of int_score coefficients/standard errors.
 
 ```{r}
 #here i am imputing W1_EDU_new_c, income_num, ADL_IADL and tot_drinks_week
@@ -279,23 +304,38 @@ for(i in 1:20){
            asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
   
   mod <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = dat_long)
   
   mod_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
   
   mod_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
   
   mod_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
   
   mod_asian <- lmerTest::lmer(cognitive_score ~ int_score + int_score:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       # the line below has the uncentered income variable
+                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
+                       #  corrected line below
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
   
   
@@ -472,16 +512,24 @@ interaction.plot(x.factor = as.factor(khandle1_long$confidante_bin),
                  response = khandle1_long$cognitive_score)
 ```
 
+Something I'm confused about that isn't a problem, just reflects my lack of understanding: why does the interaction plot not seem to match the race stratified model results? The stratified models show the largest confidante_bin coefficient for Asian participants, so I would expect Asians to have the steepest slope in the plot. That's definitely not the case. I'm guessing it is because the interaction.plot function does not account for covariates? I haven't used that function before, so I'm just curious about it's utility and interpretation.
+
 ```{r confidante table main covars}
 conf_table_main <- rbind(main_confidante_overall_table, main_confidante_white_table, main_confidante_black_table, main_confidante_latinx_table, main_confidante_asian_table)
 colnames(conf_table_main) <- "Coefficient (main covariates)"
 ```
 
 #Adjusting for asian vrmem and latinx vrmemz (all covariates)
+
+Again, these models use the uncentered income variable, which is causing the warning message, but isn't a problem for the int_score estimation. Should be corrected for the paper if a full results table will be included in the supplementary materials.
+
 ```{r conf full sample}
 m_confidante_overall <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):asian_vrmemz + 
                                          as.factor(confidante_bin):latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # the line below has the uncentered income variable
+                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # corrected line below
+                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long)
 
 stargazer(summary(m_confidante_overall)$coeff, type = "text")
@@ -491,7 +539,10 @@ confidante_overall_table <- make_table(m_confidante_overall)
 
 ```{r conf white}
 m_confidante_white <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                       # the line below has the uncentered income variable
+                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # corrected line below
+                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
 
 stargazer(summary(m_confidante_white)$coef, type = "text", single.row=TRUE)
@@ -501,8 +552,10 @@ confidante_white_table <- make_table(m_confidante_white)
 
 ```{r conf black}
 m_confidante_black <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+                                         # the line below has the uncentered income variable
+                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # corrected line below
+                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID),                                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
 
 stargazer(summary(m_confidante_black)$coef, type = "text", single.row=TRUE)
 
@@ -512,8 +565,10 @@ confidante_black_table <- make_table(m_confidante_black)
 
 ```{r conf latino}
 m_confidante_latinx <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+                                         # the line below has the uncentered income variable
+                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # corrected line below
+                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID),                                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
 
 stargazer(summary(m_confidante_latinx)$coef, type = "text", single.row=TRUE)
 
@@ -522,7 +577,10 @@ confidante_latinx_table <- make_table(m_confidante_latinx)
 
 ```{r conf asian}
 m_confidante_asian <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # the line below has the uncentered income variable
+                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
+                                         # corrected line below
+                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
 
 stargazer(summary(m_confidante_asian)$coef, type = "text", single.row=TRUE)
