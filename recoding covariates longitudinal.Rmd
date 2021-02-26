@@ -19,7 +19,7 @@ library(mice)
 library(tableone)
 library(RColorBrewer)
 
-khandle <- read_sas("/Users/ccalmasini/Desktop/Camilla KHANDLE/Datasets/khandle_all_waves_20210108.sas7bdat")
+khandle <- read_sas("/Users/ccalmasini/Dropbox/KHANDLE/Raw KHANDLE Data/Most Recent Raw Data Sets/Baseline and MHC/khandle_all_waves_20210108.sas7bdat")
 
 #checking follow-up length
 khandle %>%
@@ -128,17 +128,7 @@ dat <- dat %>%
 ##filtering native american
 dat <- dat %>%
   filter(W1_D_RACE_SUMMARY != "Native American")
-
-#table to check
-dat %>%
-  group_by("Social integration score" = int_score, "Race" = W1_D_RACE_SUMMARY) %>%
-  tally() %>%
-  spread(Race, n) %>%
-  ungroup()%>%
-  mutate(total = rowSums(select(., -1)))
 ```
-
-
 # Recoding covariates  
 1. Income: Income was turned into a continuous variable using the upper bound for the category of W1_INCOME_RANGE (rounded up by 1, ie if upper bound was 9999, turn into 10000). If W1_INCOME_RANGE was missing, the most common value based on the binary W1_INCOME_EST category was assigned.
 
