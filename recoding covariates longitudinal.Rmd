@@ -1,10 +1,9 @@
 ---
-title: "social nets recoding vars"
+title: "social nets recoding longitudinal 2"
 output: pdf_document
-editor_options: 
-  chunk_output_type: console
 ---
 
+This is the same as before, the only difference is that I'm using wave 2 data so also standardizing wave 2 senas measures and i added retirement status. 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, results = 'hide')
 
@@ -20,23 +19,30 @@ library(mice)
 library(tableone)
 library(RColorBrewer)
 
-khandle <- read_sas("/Users/ccalmasini/Desktop/Camilla KHANDLE/Datasets/Old/khandle_baseline_20201029.sas7bdat")
+khandle <- read_sas("/Users/ccalmasini/Desktop/Camilla KHANDLE/Datasets/khandle_all_waves_20210108.sas7bdat")
 
-#khandle <- read_sas("../../Dropbox/KHANDLE/Raw KHANDLE Data/Most Recent Raw Data Sets/archive/29Oct2020/khandle_baseline_20201029.sas7bdat")
+#checking follow-up length
+khandle %>%
+  mutate(age_diff = mean(W2_INTERVIEW_AGE - W1_INTERVIEW_AGE, na.rm = TRUE)) %>%
+  summarise(mean(age_diff, na.rm = TRUE))
 ```
 
 Selecting variables, standardizing W1_SENAS_exec, W1_SENAS_vrmem, W1_SENAS_sem and removing people who have missing values in those measures.
 ```{r}
 ##Selecting variables
 dat <- khandle %>%
-  select(
+  dplyr::select(
     STUDYID,
     W1_SENAS_exec,
     W1_SENAS_vrmem,
     W1_SENAS_sem,
+    W2_SENAS_exec,
+    W2_SENAS_vrmem,
+    W2_SENAS_sem,
     W1_MARITAL_STATUS,
     starts_with(c("W1_RELATIVES","W1_FRIENDS", "W1_CHILDREN", "W1_CONFIDANTE", "W1_VOLUNTEER", "W1_INCOME", "W1_ALC", "W1_SMK")),
     W1_INTERVIEW_AGE,
+    W2_INTERVIEW_AGE,
     W1_EDU_EDUCATION,
     W1_EDU_CERT,
     W1_EDU_LONGCERT,
@@ -56,11 +62,14 @@ dat <- khandle %>%
     W1_EMP_SUMMARY
   )
 
-## dropping people with missing senas and standardizing scores
+## dropping people with missing wave 1 senas and standardizing scores for all waves
 dat <- dat %>%
   mutate(execz = scale(W1_SENAS_exec),
          vrmemz = scale(W1_SENAS_vrmem),
-         semz = scale(W1_SENAS_sem)) %>%
+         semz = scale(W1_SENAS_sem),
+         execz_w2 = scale(W2_SENAS_exec),
+         vrmemz_w2 = scale(W2_SENAS_vrmem),
+         semz_w2 = scale(W2_SENAS_sem)) %>%
   drop_na(W1_SENAS_exec, W1_SENAS_sem, W1_SENAS_vrmem)
 ```
 
@@ -206,7 +215,7 @@ dat <- dat %>%
 ```{r iadls}  
 ##Using chloe's code
 ADL <- dat %>%
-  select(STUDYID, starts_with("W1_DAILY_LIVING_ADL")) %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING_ADL")) %>%
   mutate(ADL1 = ifelse(W1_DAILY_LIVING_ADL1 >= 1 & W1_DAILY_LIVING_ADL1 <= 4, W1_DAILY_LIVING_ADL1, NA),
          ADL2 = ifelse(W1_DAILY_LIVING_ADL2 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL2, NA),
          ADL3 = ifelse(W1_DAILY_LIVING_ADL3 >= 1 & W1_DAILY_LIVING_ADL3 <= 4, W1_DAILY_LIVING_ADL3, NA),
@@ -215,31 +224,26 @@ ADL <- dat %>%
          ADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
          ADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
          ADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
-         # The line below is incorrect - should be W1_DAILY_LIVING_ADL9 instead of W1_DAILY_LIVING_ADL2
-         # Fortnately, all participants incorrectly coded (n = 9) were missing at least one other ADL, so the ADL variable wasn't affected
-         # I've commented out the incorrect line and corrected it below, but there should be no change to the results
-         # ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA), #) %>%
-         # Corrected line
          ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA)) %>%
   rowwise() %>%
   mutate(n_miss = sum(is.na(ADL1), is.na(ADL2), is.na(ADL3), is.na(ADL4), is.na(ADL5), is.na(ADL6), is.na(ADL7), is.na(ADL8), is.na(ADL9)),
          ADL = ifelse(n_miss == 0, sum(ADL1, ADL2, ADL3, ADL4, ADL5, ADL6, ADL7, ADL8, ADL9, na.rm = TRUE)/9, NA)) %>%
-  select(STUDYID, ADL)
+  dplyr::select(STUDYID, ADL)
 
 
 IADL <- dat %>%
-  select(STUDYID, starts_with("W1_DAILY_LIVING_IADL")) %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING_IADL")) %>%
   mutate(IADL1 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
          IADL2 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
          IADL3 = ifelse(W1_DAILY_LIVING_IADL3 >= 1 & W1_DAILY_LIVING_IADL3 <= 4, W1_DAILY_LIVING_IADL3, NA)) %>%
   rowwise() %>%
   mutate(n_miss = sum(is.na(IADL1), is.na(IADL2), is.na(IADL3)),
          IADL = ifelse(n_miss == 0, sum(IADL1, IADL2, IADL3, na.rm = TRUE)/3, NA)) %>%
-  select(STUDYID, IADL)
+  dplyr::select(STUDYID, IADL)
 
 
 ADL_IADL <- dat %>%
-  select(STUDYID, starts_with("W1_DAILY_LIVING")) %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING")) %>%
   mutate(ADL_IADL1 = ifelse(W1_DAILY_LIVING_ADL1 >= 1 & W1_DAILY_LIVING_ADL1 <= 4, W1_DAILY_LIVING_ADL1, NA),
          ADL_IADL2 = ifelse(W1_DAILY_LIVING_ADL2 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL2, NA),
          ADL_IADL3 = ifelse(W1_DAILY_LIVING_ADL3 >= 1 & W1_DAILY_LIVING_ADL3 <= 4, W1_DAILY_LIVING_ADL3, NA),
@@ -248,9 +252,6 @@ ADL_IADL <- dat %>%
          ADL_IADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
          ADL_IADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
          ADL_IADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
-         # same error as above - will comment out incorrect line and correct below
-         # still has no effect on ADL_IADL calculation
-         # ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA),
          ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA),
          ADL_IADL10 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
          ADL_IADL11 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
@@ -262,7 +263,7 @@ ADL_IADL <- dat %>%
          ADL_IADL = ifelse(n_miss == 0, sum(ADL_IADL1, ADL_IADL2, ADL_IADL3, ADL_IADL4, ADL_IADL5, 
                                             ADL_IADL6, ADL_IADL7, ADL_IADL8, ADL_IADL9, 
                                             ADL_IADL10, ADL_IADL11, ADL_IADL12, na.rm = TRUE)/12, NA)) %>%
-  select(STUDYID, ADL_IADL)
+  dplyr::select(STUDYID, ADL_IADL)
 
 
 dat <- dat %>%
@@ -271,45 +272,24 @@ dat <- dat %>%
   inner_join(ADL_IADL, by = "STUDYID")
 ```
 
-5. Retirement status - classify as retired if they reported being retired and not working full or part time
-  * W1_EMP_NOT_WORKING == 1 and W1_EMP_FULLTIME == 0 and W1_EMP_PARTIME == 0 -> Retired
-  * W1_EMP_WORKING == 1 -> Not Retired
-  * W1_EMP_FULLTIME == 1 or W1_EMP_PARTIME == 1 -> Not retired
+5. Retirement status
 
+Classified as retired if they reported being retired (W1_EMP_NOTWORKING=1).
+Classified as not retired if they reporte working (W1_EMP_WORKING=1), working full-time (W1_EMP_FULLTIME) or part-time (W1_EMP_PARTTIME)
 ```{r retirement status}
-# dat$tot <- rowSums(dat[,c("W1_EMP_NOTWORKING",
-#                           "W1_EMP_FULLTIME",
-#                           "W1_EMP_PARTTIME",
-#                           "W1_EMP_WORKING")])
-# dat <- dat %>%
-#   mutate(retirement_stat = case_when(W1_EMP_NOTWORKING == 1 & W1_EMP_FULLTIME == 0 & W1_EMP_PARTTIME == 0 ~ "Retired",
-#                                      W1_EMP_WORKING == 1 ~ "Not retired",
-#                                      W1_EMP_FULLTIME == 1 | W1_EMP_PARTTIME == 1 ~ "Not retired",
-#                                      W1_EMP_SUMMARY %in% c(" ", "DK", "REFUSED") ~ NA_character_,
-#                                      tot == 0 & W1_EMP_SUMMARY == "DISABLED" ~ "Not retired",
-#                                      tot == 0 & W1_EMP_SUMMARY %in% c("HOMEMAKER", "HOMEMAKER / OTHER", "OTHER") ~ "Not retired"))
-
-#from rachel
 dat <- dat %>%
   mutate(retirement_stat = case_when(W1_EMP_NOTWORKING == 1 ~ "Retired",
                                      W1_EMP_WORKING == 1 ~ "Not retired",
                                      W1_EMP_FULLTIME == 1 ~ "Not retired",
                                      W1_EMP_PARTTIME == 1 ~ "Not retired"))
-
-table(dat$retirement_stat)
-
-#check
-tab <- dat[,c("W1_EMP_NOTWORKING", "W1_EMP_WORKING", "W1_EMP_FULLTIME", "W1_EMP_PARTTIME", "W1_EMP_SUMMARY" , "tot")]
-View(tab)
 ```
-
 
 ## Final dataset
 
 ```{r}
 #final datasets with variables of interest
 final_dat <- dat %>%
-  select(STUDYID,
+  dplyr::select(STUDYID,
          marital_bin,
          volunteer_bin, 
          relatives_bin,
@@ -317,6 +297,7 @@ final_dat <- dat %>%
          friends_bin,
          confidante_bin,
          W1_INTERVIEW_AGE, 
+         W2_INTERVIEW_AGE,
          W1_EDU_new, 
          W1_D_GENDER, 
          W1_D_RACE_SUMMARY, 
@@ -329,17 +310,19 @@ final_dat <- dat %>%
          ADL,
          ADL_IADL,
          retirement_stat,
-         execz, vrmemz, semz)%>%
+         execz, vrmemz, semz,
+         execz_w2, vrmemz_w2, semz_w2)%>%
   mutate_all(~replace(., . == 99 | . == 88, NA))
 
-write.csv(final_dat, "social_nets_dat.csv")
+write.csv(final_dat, "social_nets_dat_both_waves.csv")
 ```
 
 #Plot
 ```{r}
 #making a plot of proportions of people for each race who received a score of 1 for each support measure 
+#Figure 1 in the paper
 dat_plots <- final_dat %>%
-  drop_na(W1_EDU_new, income_num, ADL_IADL, tot_drinks_week)
+  drop_na(W1_EDU_new, income_num, ADL_IADL, tot_drinks_week, retirement_stat)
 
 mar <- dat_plots %>%
   group_by(W1_D_RACE_SUMMARY, "support" = marital_bin) %>%
@@ -384,8 +367,10 @@ conf <- dat_plots %>%
   mutate(support = "confidante")
 
 dat_plots2 <- rbind(mar, vol, rel, child, friends, conf)
+
+dat_plots2$support <- factor(dat_plots2$support, levels=c("marital status", "volunteer", "relatives", "children", "friends", "confidante"))
   
-png("social_nets_plot.png", units="in", width=6, height=5, res = 300)
+png("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_nets_plot_v3.png", units="in", width=6, height=5, res = 300)
 ggplot(dat_plots2, aes(x = support, y = proportion, fill = W1_D_RACE_SUMMARY))+
   geom_col(width = 0.7, position = position_dodge(width = 0.7))+
   theme_minimal()+

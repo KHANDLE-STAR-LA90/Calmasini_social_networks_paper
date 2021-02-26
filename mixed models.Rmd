@@ -1,12 +1,24 @@
 ---
 title: "social nets  models"
-output: html_document
+output:
+  html_document:
+    df_print: paged
+    code_folding: hide
+editor_options:
+  chunk_output_type: inline
 ---
 
 This Rmd does all the mixed models using the data from recoding covariates.Rmd
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(stargazer)
+library(mice)
+library(ggplot2)
+library(tableone)
+library(kableExtra)
+library(tidyverse)
 ```
 
 
@@ -27,22 +39,20 @@ make_table <- function(model){
 }
 ```
 
-# Datasets
+## Datasets
 ```{r datasets}
-# final_dat <- read.csv("/Users/ccalmasini/Desktop/Camilla KHANDLE/Social nets paper code/social_nets_dat.csv")
-final_dat <- read.csv("social_nets_dat.csv")
-
+final_dat_both <- read.csv("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/social_nets_dat_both_waves.csv")
 
 #centering education at 12 and age at 65
 #turning variables into factors
 #dropping nas for complete case analysis
-khandle1 <- final_dat %>%
+khandle1 <- final_dat_both %>%
   mutate(W1_EDU_new_c = W1_EDU_new - 12,
          W1_D_GENDER = factor(case_when(W1_D_GENDER == 1 ~ "Male",
                                         W1_D_GENDER == 2 ~ "Female")),
          W1_SMK = ifelse(W1_SMK == 0, "No", "Yes"),
          years_over_65 = W1_INTERVIEW_AGE - 65) %>%
-  drop_na(W1_EDU_new_c, income_num, ADL_IADL, tot_drinks_week)
+  drop_na(W1_EDU_new_c, income_num, ADL_IADL, tot_drinks_week, retirement_stat)
 
 #turning data into long format
 #each person is repeated 3 times: one for execz, one for vrmem an and one for semz
@@ -56,14 +66,33 @@ khandle1_long <- khandle1 %>%
   mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"))
 ```
 
-#Integration score models
+# Integration score models
 
-```{r F test}
-#this model is to test whether we can estimate a single effect for all race/domain combinations
-m1 <- lmerTest::lmer(cognitive_score ~ int_score * r_d + poly(years_over_65, 2, raw = TRUE) + W1_D_GENDER +
+## Testing for linearity
+
+```{r}
+khandle1_long <- khandle1_long %>%
+  mutate(int_score_cat = as.factor(int_score))
+
+m_linear <- lmerTest::lmer(cognitive_score ~ int_score_cat + r_d + poly(years_over_65, 2, raw = TRUE) + W1_D_GENDER +
                        W1_EDU_new_c + (1|STUDYID), 
                      REML = FALSE, 
                      data = khandle1_long)
+
+stargazer(summary(m_linear)$coef, type = "text", title = "Testing for linearity")
+
+###this just saves the table 
+# stargazer(summary(m_linear)$coef, type = "html", title = "Testing for linearity",
+#           out = "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/linearity_test.html")
+
+```
+
+## F-test 
+
+```{r F test}
+#this model is to test whether we can estimate a single effect for all race/domain combinations
+m1 <- lmerTest::lmer(cognitive_score ~ int_score * r_d + poly(years_over_65, 2, raw = TRUE) + W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
+                     REML = FALSE, data = khandle1_long)
 
 #f-test for the  int_score*r_d interaction term is not significant
 anova(m1)
@@ -72,8 +101,9 @@ anova(m1)
 stargazer(summary(m1)$coef, type = "text")
 ```
 
-#Adjusting for asian * vrmem and using main covs only (age, gender, education, race)
-##Overall model with main covariates
+## Main covariates (age, gender, education, race)
+
+### Full sample model (adjusting for asian * vrmem)
 
 ```{r full sample main}
 #create asian_vrmemz indicator
@@ -81,7 +111,7 @@ khandle1_long <- khandle1_long %>%
   mutate(asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)))
 
 #overall model
-m1_main <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz+ poly(years_over_65, 2, raw = TRUE) + 
+m1_main <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
                        W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
                        REML = FALSE, data = khandle1_long)
 
@@ -89,169 +119,96 @@ stargazer(summary(m1_main)$coef, type = "text")
 
 #this just gives the coefficient for int_score with 95%CI
 table1 <- make_table(m1_main)
-```
 
-```{r white main}
-#this model stratifies for white only
-m_main_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+#diagnostic plots
+plot(m1_main)
+qqnorm(residuals(m1_main))
+
+#adding interaction between integration score and race
+m1_int <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:W1_D_RACE_SUMMARY + 
+                           int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
                        W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
+                       REML = FALSE, data = khandle1_long)
 
-
-stargazer(summary(m_main_white)$coef, type = "text")
-
-table_main_white <- make_table(m_main_white)
-table_main_white
+anova(m1_int)
+stargazer(summary(m1_int)$coef, type = "text")
 ```
 
-```{r latino main}
-#latino only
-m_main_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+### Stratified by race
 
-
-stargazer(summary(m_main_latinx)$coef, type = "text")
-
-table_main_latinx <- make_table(m_main_latinx)
-table_main_latinx
+```{r stratified, main covars}
+#This runs the model for integration score by race
+#For Asian, need to include the int_score:asian_vrmemz interaction to exclude this group from the interpretation
+#of the main int_score coefficient
+tables_main_covars <- list()
+for(i in c("White", "Black", "LatinX", "Asian")){
+  if (i != "Asian"){
+    mod <- lmerTest::lmer(cognitive_score ~ int_score + poly(years_over_65, 2, raw = TRUE) + 
+                                        r_d + W1_D_GENDER + W1_EDU_new_c + (1 |STUDYID), REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  } else {
+    mod <- lmerTest::lmer(cognitive_score ~ int_score + poly(years_over_65, 2, raw = TRUE) + int_score:asian_vrmemz + 
+                                        r_d  + W1_D_GENDER + W1_EDU_new_c + (1 |STUDYID), REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  }
+  
+  stargazer(summary(mod)$coef, type = "text", title = paste("Regression for", i,  "participants - integration score, main covariates"))
+  
+  tables_main_covars[[i]] <- make_table(mod)
+}
 ```
 
-```{r black main}
-#black only
-m_main_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+------------
 
+## Using all covariates (ADL_IADL, alcohol, income, retirement status)
 
-stargazer(summary(m_main_black)$coef, type = "text")
+### Full sample
 
-table_main_black <- make_table(m_main_black)
-table_main_black
-```
-
-
-```{r asian main}
-#asian only
-m_main_asian <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
-
-
-stargazer(summary(m_main_asian)$coef, type = "text")
-
-table_main_asian <- make_table(m_main_asian)
-table_main_asian
-```
-
-```{r main covariates table}
-#this puts all the coefficients + CIs together to make a tables
-table_main_covs <- rbind(table1, table_main_white, table_main_black, table_main_latinx, table_main_asian)
-colnames(table_main_covs) <- "Coefficient (main covariates)"
-table_main_covs <- cbind('label' = c("Main covars - overall", "Main covars - white", "Main covars - black", "Main covars - latinx", "Main covars - asian"), table_main_covs)
-```
-
-# Adding other covariates (drinks, income, adl_iadl)
-
-You used the non-centered income_num variable in these models, which is producing the warning, "Some predictor variables are on very different scales: consider rescaling."
-
-Using the scaled version only changes the estimated intercept and the beta/CIs for the income variable. It does not change the betas or confidence intervals for the int_score, so everything is fine, but using the scaled variable will get rid of the warning.
-
-## Overall
 ```{r overall & all covs}
 #this is overall model also including other covariates
 m2 <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID), 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
                        REML = FALSE, data = khandle1_long)
 
 stargazer(summary(m2)$coeff, type = "text")
 
 table2 <- make_table(m2)
+
+#adding interaction between int score and race to check whether effect varies by race
+m2_int <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:W1_D_RACE_SUMMARY + 
+                           int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
+                       REML = FALSE, data = khandle1_long)
+anova(m2_int)
+
+stargazer(summary(m2_int)$coef, type = "text")
+```
+### Stratified
+
+```{r}
+#This for-loop is the same as above, but using the enhanced covariate sets
+tables_all_covars <- list()
+for(i in c("White", "Black", "LatinX", "Asian")){
+  if(i != "Asian"){
+    mod_all <- lmerTest::lmer(cognitive_score ~ int_score + poly(years_over_65, 2, raw = TRUE) + r_d + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
+                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  
+  } else {
+    mod_all <- lmerTest::lmer(cognitive_score ~ int_score + poly(years_over_65, 2, raw = TRUE) + int_score:asian_vrmemz +  r_d + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
+                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  }
+  
+  stargazer(summary(mod_all)$coef, type = "text", title = paste("Regression for", i,  "participants -- integration score, enhanced covariates"))
+  
+  tables_all_covars[[i]] <- make_table(mod_all)
+}
 ```
 
-##White only
-```{r white}
-#model stratified for white + table for white
-m_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
-
-
-stargazer(summary(m_white)$coef, type = "text")
-
-table_white <- make_table(m_white)
-table_white
-```
-
-##Black only
-```{r black}
-#model stratified for black + table for black
-m_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID), 
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
-
-stargazer(summary(m_black)$coeff, type = "text")
-
-table_black <- make_table(m_black)
-```
-
-##Latino only
-```{r latinx}
-#model stratified for latino + table for latino
-m_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
-
-stargazer(summary(m_latinx)$coeff, type = "text")
-
-table_latinx <- make_table(m_latinx)
-```
-
-##Asian only
-```{r asian}
-#model stratified for Asian + table for asian
-m_asian <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
-                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
-
-stargazer(summary(m_asian)$coeff, type = "text")
-
-table_asian <- make_table(m_asian)
-```
-
-
-```{r maketable}
-#this puts all the coefficients together in a table
-table_all_covs <- rbind(table2, table_white, table_black, table_latinx, table_asian)
-colnames(table_all_covs) <- "Coefficient (all covariates)"
-#table_all_covs <- cbind(labels, table_all_covs) 
-
-table_overall <- cbind(table_main_covs, table_all_covs) 
-table_overall$label <- c("Overall", "White", "Black", "Latinx", "Asian")
-```
-
-## Imputing
-
-These models also use the unscaled income variable. Could change to remove error message, but not important for calculation of int_score coefficients/standard errors.
+## Imputing int score models
 
 ```{r}
 #here i am imputing W1_EDU_new_c, income_num, ADL_IADL and tot_drinks_week
-khandle_full <- final_dat %>%
+khandle_full <- final_dat_both %>%
   mutate(W1_EDU_new_c = W1_EDU_new - 12,
          W1_D_GENDER = case_when(W1_D_GENDER == 1 ~ "Male",
                                  W1_D_GENDER == 2 ~ "Female"),
@@ -260,36 +217,118 @@ khandle_full <- final_dat %>%
          years_over_65 = W1_INTERVIEW_AGE - 65, 
          vrmemz = as.numeric(vrmemz),
          semz = as.numeric(semz),
-         execz = as.numeric(execz)) %>%
-  select(-c(W1_SMK, IADL, ADL, confidante_bin, W1_INTERVIEW_AGE, W1_EDU_new))
+         execz = as.numeric(execz),
+         retirement_stat = as.factor(retirement_stat)) %>%
+  dplyr::select(-c(X, W1_SMK, IADL, ADL, W1_INTERVIEW_AGE, W1_EDU_new, smk_status, vrmemz_w2, semz_w2, execz_w2, W2_INTERVIEW_AGE))
 
-summary(khandle_full)
+#making a predictor matrix to pick which variables are used in the multiple imputation models
+pred <- data.frame(diag(ncol(khandle_full)))
+pred <- 1-pred
+colnames(pred) <- colnames(khandle_full)
+rownames(pred) <- colnames(khandle_full)
+
+vars_impute <- apply(is.na(khandle_full), 2, sum) > 0
+
+pred[names(which(vars_impute == FALSE)), ] <- 0
+pred[,1:6] <- 0
+
+pred <- as.matrix(pred)
 
 #20 imputatios on the flat dataset
-imputations <- mice::mice(khandle_full, print = FALSE, seed = 123, m=20, method = "pmm")
+imputations <- mice::mice(khandle_full, print = FALSE, seed = 123, 
+                          pred = pred,
+                          m=20)
 
 #this gives a list with 20 datasets, one for each imputation
 imp_dat <- mice::complete(imputations, "all")
+```
 
+```{r imputing main covariates models}
 #making a for loop that loops through each element of imp_dat (ie each of the 20 imputed datasets)
 #and turns the data into long format
 #then runs the overall model and race-stratified models adjusted for covariates
 #and returns lists of coefficients and standard errors
+
+imp_coefs_main <- list()
+stan_errs_main <- list()
+
+#these models only use main covariates
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),            
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),           
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),             
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),            
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ int_score + int_score:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),             
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs_main$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs_main$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs_main$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs_main$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs_main$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs_main$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs_main$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs_main$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs_main$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs_main$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+#this calculates a pooled coefficient with standard errors for the MI 
+#pooled coeff should just be average of all 20 coeffs from imputed datasets
+#standard error should be sqrt(within variance+between variance)
+#within variance = mean(standard errors from imputations^2)
+#between variance = (1 + 1/19) * sd(coefficients from imputations)^2
+
+imputed_coef_main <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs_main[i]))
+  within_var <- mean(unlist(stan_errs_main[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs_main[i]))^2
+  #between_var <- sum((unlist(imp_coefs_main[i]) - pooled_coeff)^2)/19
+
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_main[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
+```
+
+```{r}
+#same as above but with full covariate set
 imp_coefs <- list()
-stand_errs <- list()
-
-imp_coefs_white <- list()
-stand_errs_white <- list()
-
-imp_coefs_latinx <- list()
-stand_errs_latinx <- list()
-
-imp_coefs_black <- list()
-stand_errs_black <- list()
-
-imp_coefs_asian <- list()
-stand_errs_asian <- list()
-
+stan_errs <- list()
 
 for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
@@ -304,144 +343,103 @@ for(i in 1:20){
            asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
   
   mod <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),            
                        REML = FALSE, data = dat_long)
   
   mod_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + + retirement_stat + (1|STUDYID),           
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
   
   mod_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),             
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
   
   mod_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),            
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
   
   mod_asian <- lmerTest::lmer(cognitive_score ~ int_score + int_score:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                       # the line below has the uncentered income variable
-                       # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num + (1|STUDYID), 
-                       #  corrected line below
-                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + (1|STUDYID),                        
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),             
                        REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
   
+  imp_coefs$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs$full_sample[[i]] <- summary(mod)$coef[2,2]
   
-  imp_coefs[[i]] <- summary(mod)$coef[2,1]
-  stand_errs[[i]] <- summary(mod)$coef[2,2]
+  imp_coefs$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs$white[[i]] <- summary(mod_white)$coef[2,2]
   
-  imp_coefs_white[[i]] <- summary(mod_white)$coef[2,1]
-  stand_errs_white[[i]] <- summary(mod_white)$coef[2,2]
+  imp_coefs$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
   
-  imp_coefs_latinx[[i]] <- summary(mod_latinx)$coef[2,1]
-  stand_errs_latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  imp_coefs$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs$black[[i]] <- summary(mod_black)$coef[2,2]
   
-  imp_coefs_black[[i]] <- summary(mod_black)$coef[2,1]
-  stand_errs_black[[i]] <- summary(mod_black)$coef[2,2]
-  
-  imp_coefs_asian[[i]] <- summary(mod_asian)$coef[2,1]
-  stand_errs_asian[[i]] <- summary(mod_asian)$coef[2,2]
+  imp_coefs$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs$asian[[i]] <- summary(mod_asian)$coef[2,2]
 }
 
-#here i am calculating the pooled coefficient and standard errors from the imputation
-#for each of the models (ie overall and race-startified)
-#overall pooled coefficient w/ CI
-pooled_coeff <- mean(unlist(imp_coefs))
+imputed_coef_CI <- list()
 
-#within and between variance
-within_var <- mean(unlist(stand_errs)**2)
-between_var <- (sd(unlist(imp_coefs))**2)/19
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs[i]))
+  within_var <- mean(unlist(stan_errs[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs[i]))^2
+  
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
 
-#pooled error
-pooled_stand_err <- sqrt(within_var+between_var)
-
-lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
-upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
-
-imputed_coef_CI <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
-
-#white pooled coefficients
-pooled_coeff_white <- mean(unlist(imp_coefs_white))
-
-within_var_white <- mean(unlist(stand_errs_white)**2)
-between_var_white <- (sd(unlist(imp_coefs_white))**2)/19
-
-pooled_stand_err_white <- sqrt(within_var_white+between_var_white)
-
-lower_ci_white <- pooled_coeff_white - 1.96 * pooled_stand_err_white
-upper_ci_white <- pooled_coeff_white + 1.96 * pooled_stand_err_white
-
-imputed_coef_CI_white <- paste0(round(pooled_coeff_white, 3), " (", round(lower_ci_white, 3), ", ", round(upper_ci_white, 3), ")")
-
-#latinx pooled coefficients
-pooled_coeff_latinx <- mean(unlist(imp_coefs_latinx))
-
-within_var_latinx <- mean(unlist(stand_errs_latinx)**2)
-between_var_latinx <- (sd(unlist(imp_coefs_latinx))**2)/19
-
-pooled_stand_err_latinx <- sqrt(within_var_latinx+between_var_latinx)
-
-lower_ci_latinx <- pooled_coeff_latinx - 1.96 * pooled_stand_err_latinx
-upper_ci_latinx <- pooled_coeff_latinx + 1.96 * pooled_stand_err_latinx
-
-imputed_coef_CI_latinx <- paste0(round(pooled_coeff_latinx, 3), " (", round(lower_ci_latinx, 3), ", ", round(upper_ci_latinx, 3), ")")
-
-#black pooled coefficients
-pooled_coeff_black <- mean(unlist(imp_coefs_black))
-
-within_var_black <- mean(unlist(stand_errs_black)**2)
-between_var_black <- (sd(unlist(imp_coefs_black))**2)/19
-
-pooled_stand_err_black <- sqrt(within_var_black+between_var_black)
-
-lower_ci_black <- pooled_coeff_black - 1.96 * pooled_stand_err_black
-upper_ci_black <- pooled_coeff_black + 1.96 * pooled_stand_err_black
-
-imputed_coef_CI_black <- paste0(round(pooled_coeff_black, 3), " (", round(lower_ci_black, 3), ", ", round(upper_ci_black, 3), ")")
-
-#asian pooled coefficients
-pooled_coeff_asian <- mean(unlist(imp_coefs_asian))
-
-within_var_asian <- mean(unlist(stand_errs_asian)**2)
-between_var_asian <- (sd(unlist(imp_coefs_asian))**2)/19
-
-pooled_stand_err_asian <- sqrt(within_var_asian+between_var_asian)
-
-lower_ci_asian <- pooled_coeff_asian - 1.96 * pooled_stand_err_asian
-upper_ci_asian <- pooled_coeff_asian + 1.96 * pooled_stand_err_asian
-
-imputed_coef_CI_asian <- paste0(round(pooled_coeff_asian, 3), " (", round(lower_ci_asian, 3), ", ", round(upper_ci_asian, 3), ")")
+  imputed_coef_CI[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
 ```
 
-## Make the final table 
-```{r imputation table & complete cases table}
-table_imputation <- data.frame(rbind(imputed_coef_CI, imputed_coef_CI_white, imputed_coef_CI_black, imputed_coef_CI_latinx, imputed_coef_CI_asian), row.names = NULL)
-colnames(table_imputation) <- "Coefficient (all covariates - imputed)"
+## Integration final table
+```{r}
+#this takes all the outputs from above and makes a table
+int_score_main_tab <- rbind(table1,
+                            tables_main_covars$Asian,
+                            tables_main_covars$Black,
+                            tables_main_covars$LatinX,
+                            tables_main_covars$White)
 
-table_with_imp <- cbind(table_overall, table_imputation)
+int_score_all_tab <- rbind(table2,
+                           tables_all_covars$Asian, 
+                           tables_all_covars$Black,
+                           tables_all_covars$LatinX,
+                           tables_all_covars$White)
 
-#kable(table_with_imp)
+int_score_main_impute <- t(data.frame(imputed_coef_main))
+int_score_impute <- t(data.frame(imputed_coef_CI))
+
+table_int_score <- cbind(int_score_main_tab, int_score_main_impute, int_score_all_tab, int_score_impute)
+rownames(table_int_score) <- c("Overall", "Asian", "Black", "LatinX", "White")
+
+write.csv(table_int_score, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_int_score.csv")
+
+kable(table_int_score, format = "html", booktabs = FALSE, align = c("l", "c", "c"),
+      col.names = c("Core covariates beta (95% CI)", "Core covariates - imputed", "Enhanced covariates beta (95% CI)", "Enhanced covariates imputed beta (95% CI)"), escape = FALSE) %>%
+  kable_styling() %>%
+  column_spec(1, width = "4cm") %>%
+  column_spec(2, width = "3.5cm")%>%
+  pack_rows(" ", 1, 1) %>%
+  pack_rows(" ", 2, 2) %>%
+  pack_rows(" ", 3, 3) %>%
+  pack_rows(" ", 4, 4) %>%
+  pack_rows(" ", 5, 5) %>%
+ readr::write_file("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_int_score.html")
 ```
 
-#Confidante
+## Confidante
 This part of the code runs the models using confidante as the main independent variable instead of integration score
+
+### F-test
 ```{r}
 table(khandle1$confidante_bin)
 
 #confidante - f test
-m_confidante <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin)*r_d + poly(years_over_65, 2, raw = TRUE) + 
+m_confidante <- lmerTest::lmer(cognitive_score ~ confidante_bin*r_d + poly(years_over_65, 2, raw = TRUE) + 
                          W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
                          REML = FALSE, data = khandle1_long)
 anova(m_confidante)
@@ -449,157 +447,304 @@ anova(m_confidante)
 stargazer(summary(m_confidante)$coeff, type = "text")
 ```
 
-#Adjusting for asian vrmem and latinx vrmemz (main covariates)
-
+## Adjusting for asian vrmem and latinx vrmemz (main covariates)
+### Full sample
 ```{r main conf overall}
 khandle1_long <- khandle1_long %>%
   mutate(latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0)))
 
-m_main_confidante_overall <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):asian_vrmemz+ 
-                                         as.factor(confidante_bin):latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+m_main_confidante_overall <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + 
+                                         confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
                                          W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long)
 
-stargazer(summary(m_main_confidante_overall)$coeff, type = "text")
+stargazer(summary(m_main_confidante_overall)$coef, type = "text", title = "Confidante regression for full sample using main covars")
 
-main_confidante_overall_table <- make_table(m_main_confidante_overall)
+table1_confi <- make_table(m_main_confidante_overall)
+
+#adding interaction between confidante and race
+m1_int_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:W1_D_RACE_SUMMARY + 
+                           confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
+                       REML = FALSE, data = khandle1_long)
+anova(m1_int_confi)
 ```
 
-```{r main conf white}
-m_main_confidante_white <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + poly(years_over_65, 2, raw = TRUE) + 
+### Confidante models stratified by race and adjusted for main covars
+
+```{r confidante, main covars, stratified}
+#this runs the stratified models with main covariates
+#all models for asian should include confidante_bin x asian_vrmemz interaction
+#all models for latino should include confidante_bin x latin_vrmemz interaction
+
+tables_main_covars_confi <- list()
+
+for(i in c("White", "Black", "LatinX", "Asian")){
+  if(i == "Asian"){
+    mod_main_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz+ 
+                                        + poly(years_over_65, 2, raw = TRUE) + 
                                          W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
-
-stargazer(summary(m_main_confidante_white)$coef, type = "text", single.row=TRUE)
-
-main_confidante_white_table <- make_table(m_main_confidante_white)
-```
-
-```{r main conf black}
-m_main_confidante_black <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  
+  } else if (i == "LatinX") {
+     mod_main_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:latin_vrmemz+ 
+                                        + poly(years_over_65, 2, raw = TRUE) + 
                                          W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
-
-stargazer(summary(m_main_confidante_black)$coef, type = "text", single.row=TRUE)
-
-main_confidante_black_table <- make_table(m_main_confidante_black)
-
-```
-
-```{r main conf latino}
-m_main_confidante_latinx <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  } else {
+    mod_main_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
                                          W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
-
-stargazer(summary(m_main_confidante_latinx)$coef, type = "text", single.row=TRUE)
-
-
-main_confidante_latinx_table <- make_table(m_main_confidante_latinx)
+                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  }
+  
+  stargazer(summary(mod_main_confi)$coef, type = "text", title = paste("Confidante regression for", i,  "participants using main covariates"))
+  
+  tables_main_covars_confi[[i]] <- make_table(mod_main_confi)
+}
 ```
 
-```{r main conf asian}
-m_main_confidante_asian <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):asian_vrmemz + 
-                                         poly(years_over_65, 2, raw = TRUE) + 
-                                         W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+## Confidante models adjusting for all covariates
 
-stargazer(summary(m_main_confidante_asian)$coef, type = "text", single.row=TRUE)
-
-main_confidante_asian_table <- make_table(m_main_confidante_asian)
-
-interaction.plot(x.factor = as.factor(khandle1_long$confidante_bin), 
-                 trace.factor = as.factor(khandle1_long$W1_D_RACE_SUMMARY),
-                 response = khandle1_long$cognitive_score)
-```
-
-Something I'm confused about that isn't a problem, just reflects my lack of understanding: why does the interaction plot not seem to match the race stratified model results? The stratified models show the largest confidante_bin coefficient for Asian participants, so I would expect Asians to have the steepest slope in the plot. That's definitely not the case. I'm guessing it is because the interaction.plot function does not account for covariates? I haven't used that function before, so I'm just curious about it's utility and interpretation.
-
-```{r confidante table main covars}
-conf_table_main <- rbind(main_confidante_overall_table, main_confidante_white_table, main_confidante_black_table, main_confidante_latinx_table, main_confidante_asian_table)
-colnames(conf_table_main) <- "Coefficient (main covariates)"
-```
-
-#Adjusting for asian vrmem and latinx vrmemz (all covariates)
-
-Again, these models use the uncentered income variable, which is causing the warning message, but isn't a problem for the int_score estimation. Should be corrected for the paper if a full results table will be included in the supplementary materials.
+###Full sample
 
 ```{r conf full sample}
-m_confidante_overall <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):asian_vrmemz + 
-                                         as.factor(confidante_bin):latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                                         # the line below has the uncentered income variable
-                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                         # corrected line below
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID), 
+m_confidante_overall <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + 
+                                         confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + retirement_stat + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long)
 
 stargazer(summary(m_confidante_overall)$coeff, type = "text")
 
-confidante_overall_table <- make_table(m_confidante_overall)
+table2_confi <- make_table(m_confidante_overall)
+
+#adding interaction between confidante and race
+m2_int_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:W1_D_RACE_SUMMARY + 
+                                 confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                                 W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + retirement_stat + (1|STUDYID),
+                               REML = FALSE, data = khandle1_long)
+anova(m2_int_confi)
 ```
 
-```{r conf white}
-m_confidante_white <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                                       # the line below has the uncentered income variable
-                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                         # corrected line below
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "White"))
+### Stratified confidante models with all covariates
+```{r}
+tables_all_covars_confi <- list()
 
-stargazer(summary(m_confidante_white)$coef, type = "text", single.row=TRUE)
+for(i in c("White", "Black", "LatinX", "Asian")){
+  if(i == "Asian"){
+    mod_all_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + 
+                                      poly(years_over_65, 2, raw = TRUE) + 
+                                      W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + retirement_stat + (1|STUDYID), 
+                                    REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+    
+  } else if (i == "LatinX") {
+    mod_all_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:latin_vrmemz+ 
+                                      + poly(years_over_65, 2, raw = TRUE) + 
+                                      W1_D_GENDER + W1_EDU_new_c + + ADL_IADL + income_num_c + tot_drinks_week + retirement_stat + (1|STUDYID), 
+                                    REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  } else {
+    mod_all_confi <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + 
+                                      + poly(years_over_65, 2, raw = TRUE) + 
+                                      W1_D_GENDER + W1_EDU_new_c + + ADL_IADL + income_num_c + tot_drinks_week + retirement_stat + (1|STUDYID), 
+                                    REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
+  }
+  
+  stargazer(summary(mod_all_confi)$coef, type = "text", title = paste("Confidante regression for", i,  "participants using all covariates"))
+  
+  tables_all_covars_confi[[i]] <- make_table(mod_all_confi)
+}
 
-confidante_white_table <- make_table(m_confidante_white)
 ```
 
-```{r conf black}
-m_confidante_black <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + poly(years_over_65, 2, raw = TRUE) + 
-                                         # the line below has the uncentered income variable
-                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                         # corrected line below
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID),                                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+## Imputing confidante
 
-stargazer(summary(m_confidante_black)$coef, type = "text", single.row=TRUE)
+```{r}
+#same as above -- but now imputing running models for confidante using main covariates
 
-confidante_black_table <- make_table(m_confidante_black)
+imp_coefs_confi_main <- list()
+stan_errs_main_confi <- list()
 
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)),
+         latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ confidante_bin + confidante_bin:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs_confi_main$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs_main_confi$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs_confi_main$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs_main_confi$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs_confi_main$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs_main_confi$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs_confi_main$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs_main_confi$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs_confi_main$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs_main_confi$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+imputed_coef_confi_main <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs_confi_main[i]))
+  within_var <- mean(unlist(stan_errs_main_confi[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs_confi_main[i]))^2
+
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_confi_main[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
 ```
 
-```{r conf latino}
-m_confidante_latinx <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                                         # the line below has the uncentered income variable
-                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                         # corrected line below
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID),                                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
 
-stargazer(summary(m_confidante_latinx)$coef, type = "text", single.row=TRUE)
+```{r}
+#same as above -- but now imputing for confidante running models for confidante using all covariates
+imp_coefs_confi <- list()
+stan_errs_confi <- list()
 
-confidante_latinx_table <- make_table(m_confidante_latinx)
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)),
+         latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ confidante_bin + confidante_bin:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs_confi$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs_confi$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs_confi$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs_confi$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs_confi$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs_confi$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs_confi$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs_confi$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs_confi$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs_confi$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+imputed_coef_CI_confi <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs_confi[i]))
+  within_var <- mean(unlist(stan_errs_confi[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs_confi[i]))^2
+
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_CI_confi[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
+
+###way to save output
+      # saveRDS(imputed_coef_CI_confi, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/main_covars_imputed_confidante.rds")
+      # 
+      # test <- readRDS("main_covars_imputed_confidante.rds")
+      # 
+      # test
+########
 ```
 
-```{r conf asian}
-m_confidante_asian <- lmerTest::lmer(cognitive_score ~ as.factor(confidante_bin) + r_d + as.factor(confidante_bin):asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
-                                         # the line below has the uncentered income variable
-                                         # W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num + tot_drinks_week + (1|STUDYID), 
-                                         # corrected line below
-                                         W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + (1|STUDYID), 
-                                       REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+# Making table for confidante 
+```{r}
+#this just saves everything as a table so i can import in word
+#this is table 2 in the paper
+confi_main_tab <- rbind(table1_confi,
+                            tables_main_covars_confi$Asian,
+                            tables_main_covars_confi$Black,
+                            tables_main_covars_confi$LatinX,
+                            tables_main_covars_confi$White)
 
-stargazer(summary(m_confidante_asian)$coef, type = "text", single.row=TRUE)
+confi_all_tab <- rbind(table2_confi,
+                           tables_all_covars_confi$Asian, 
+                           tables_all_covars_confi$Black,
+                           tables_all_covars_confi$LatinX,
+                           tables_all_covars_confi$White)
 
+confi_impute_main <- t(data.frame(imputed_coef_confi_main))
+confi_impute <- t(data.frame(imputed_coef_CI_confi))
 
-confidante_asian_table <- make_table(m_confidante_asian)
+table_confi <- cbind(confi_main_tab, confi_impute_main, confi_all_tab, confi_impute)
+
+rownames(table_confi) <- c("Overall", "Asian", "Black", "LatinX", "White")
+
+write.csv(table_confi, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_confi.csv")
+
+kable(table_confi, format = "html", booktabs = FALSE, align = c("l", "c", "c"),
+      col.names = c("Core covariates beta (95% CI)", "Core - imputed", "Enhanced covariates beta (95% CI)", "Enhanced - imputed"), escape = FALSE) %>%
+  kable_styling() %>%
+  column_spec(1, width = "4cm") %>%
+  column_spec(2, width = "3.5cm")%>%
+  pack_rows(" ", 1, 1) %>%
+  pack_rows(" ", 2, 2) %>%
+  pack_rows(" ", 3, 3) %>%
+  pack_rows(" ", 4, 4) %>%
+  pack_rows(" ", 5, 5) %>%
+ readr::write_file("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_confi.html")
 ```
-
-```{r conf maketable}
-conf_table_all <- rbind(confidante_overall_table, confidante_white_table, confidante_black_table, confidante_latinx_table, confidante_asian_table)
-colnames(conf_table_all) <- "Coefficient (all covariates)"
-
-#joining main covars and overall table together
-confidante_table <- cbind('labels' = c("Overall", "White", "Black", "Latinx", "Asian"), conf_table_main, conf_table_all)
-kable(confidante_table)
-```
-
-
-
-
 
 
