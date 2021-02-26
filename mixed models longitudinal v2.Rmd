@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: inline
 ---
 
-This Rmd does all the mixed models using the data from recoding covariates.Rmd
+This Rmd does all the mixed models using the data from recoding covariates longitudinal.Rmd
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
