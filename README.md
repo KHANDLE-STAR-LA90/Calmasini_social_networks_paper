@@ -15,6 +15,15 @@ To check:
 * make_table1.R
 	* This just makes table1 that I put in the paper
 
+General things to make sure:
+* For int_score:
+	* All full-sample models and models stratified by race = "Asian" should include an interaction between int_score and asian_vrmemz
 
+* For confidante:
+	* Full sample models should include interaction between confidante_bin and asian_vrmemz and confidante_bin and latin_vrmemz
+	* Models stratified by race = "Asian" should include interaction between confidante_bin and asian_vrmemz
+	* Models stratified by race = "LatinX" should include interaction between confidante_bin and latino_vrmemz
+
+* For longitudinal analyses: same as above, but all models should also have an interaction between exposure and years_over_65
 
 
