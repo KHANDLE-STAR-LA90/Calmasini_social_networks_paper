@@ -1,0 +1,508 @@
+---
+title: "08_cross_sectional_analysis_impute"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#libraries & datasets
+library(dplyr)
+library(stargazer)
+library(mice)
+library(ggplot2)
+library(tableone)
+library(kableExtra)
+library(tidyverse)
+library(miceadds)
+
+final_dat_both <- read.csv("/Users/ccalmasini/Desktop/Projects/social_networks_paper/social_nets_dat_both_waves.csv")
+```
+
+# Integration score models with imputed datasets
+
+Generate 20 imputed datasets on the flat dataset, then turn each of them into long format and run the analysis. 
+
+```{r}
+#here i am imputing W1_EDU_new_c, income_num, ADL_IADL and tot_drinks_week
+khandle_full <- final_dat_both %>%
+  mutate(W1_EDU_new_c = W1_EDU_new - 12,
+         W1_D_GENDER = case_when(W1_D_GENDER == 1 ~ "Male",
+                                 W1_D_GENDER == 2 ~ "Female"),
+         W1_D_GENDER = as.factor(W1_D_GENDER),
+         W1_SMK = ifelse(W1_SMK == 0, "No", "Yes"),
+         years_over_65 = W1_INTERVIEW_AGE - 65, 
+         vrmemz = as.numeric(vrmemz),
+         semz = as.numeric(semz),
+         execz = as.numeric(execz),
+         retirement_stat = as.factor(retirement_stat)) %>%
+  dplyr::select(-c(X, W1_SMK, IADL, ADL, W1_INTERVIEW_AGE, W1_EDU_new, smk_status, vrmemz_w2, semz_w2, execz_w2, W2_INTERVIEW_AGE))
+
+#making a predictor matrix to pick which variables are used in the multiple imputation models
+pred <- data.frame(diag(ncol(khandle_full)))
+pred <- 1-pred
+colnames(pred) <- colnames(khandle_full)
+rownames(pred) <- colnames(khandle_full)
+
+vars_impute <- apply(is.na(khandle_full), 2, sum) > 0
+
+pred[names(which(vars_impute == FALSE)), ] <- 0
+pred[,1:6] <- 0
+
+pred <- as.matrix(pred)
+
+#20 imputatios on the flat dataset
+imputations <- mice::mice(khandle_full, print = FALSE, seed = 123, 
+                          pred = pred,
+                          m=20)
+
+#this gives a list with 20 datasets, one for each imputation
+imp_dat <- mice::complete(imputations, "all")
+```
+
+```{r imputing main covariates models}
+#making a for loop that loops through each element of imp_dat (ie each of the 20 imputed datasets)
+#and turns the data into long format
+#then runs the overall model and race-stratified models adjusted for covariates
+#and returns lists of coefficients and standard errors
+
+imp_coefs_main <- list()
+stan_errs_main <- list()
+
+#these models only use main covariates
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),            
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),           
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),             
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),            
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ int_score + int_score:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),             
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs_main$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs_main$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs_main$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs_main$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs_main$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs_main$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs_main$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs_main$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs_main$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs_main$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+#this calculates a pooled coefficient with standard errors for the MI 
+#pooled coeff should just be average of all 20 coeffs from imputed datasets
+#standard error should be sqrt(within variance+between variance)
+#within variance = mean(standard errors from imputations^2)
+#between variance = (1 + 1/19) * sd(coefficients from imputations)^2
+
+imputed_coef_main <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs_main[i]))
+  within_var <- mean(unlist(stan_errs_main[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs_main[i]))^2
+  #between_var <- sum((unlist(imp_coefs_main[i]) - pooled_coeff)^2)/19
+
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_main[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
+
+saveRDS(imputed_coef_main, 'output/imputed_coef_main.RDS')
+```
+
+```{r}
+#same as above but with full covariate set
+imp_coefs <- list()
+stan_errs <- list()
+
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),            
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + + retirement_stat + (1|STUDYID),           
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),             
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ int_score + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),            
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ int_score + int_score:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),             
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+imputed_coef_CI <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs[i]))
+  within_var <- mean(unlist(stan_errs[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs[i]))^2
+  
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_CI[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
+
+saveRDS(imputed_coef_CI, 'output/imputed_coef_CI.RDS')
+```
+
+### Calculating pooled p vals from F-tests (using micombine.F function)
+
+1. Main covariate set  
+
+```{r}
+f <- c()
+for(i in 1:20){
+  print(i)
+  tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
+  
+  m_int<- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:W1_D_RACE_SUMMARY + 
+                             int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
+                           REML = FALSE, data = dat_long)
+  
+  anv <- data.frame(anova(m_int))
+  f[i] <- anv["int_score:W1_D_RACE_SUMMARY", 'F.value']
+}
+
+micombine.F(f, df1=3)
+
+```
+
+2. Full covariate set 
+
+```{r}
+f_all <- c()
+p_all <- c()
+for(i in 1:20){
+  print(i)
+  tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0))) 
+  
+  m_int<- lmerTest::lmer(cognitive_score ~ int_score + r_d + int_score:W1_D_RACE_SUMMARY + 
+                           int_score:asian_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                           W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + 
+                           retirement_stat + (1|STUDYID),            
+                         REML = FALSE, data = dat_long)
+  
+  anv <- data.frame(anova(m_int))
+  f_all[i] <- anv["int_score:W1_D_RACE_SUMMARY", 'F.value']
+  p_all[i] <- anv["int_score:W1_D_RACE_SUMMARY", 'Pr..F.']
+}
+
+micombine.F(f_all, df1=3)
+```
+
+# Confidante models with imputed dataset
+
+```{r}
+#same as above -- but now imputing running models for confidante using main covariates
+
+imp_coefs_confi_main <- list()
+stan_errs_main_confi <- list()
+
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)),
+         latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ confidante_bin + confidante_bin:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs_confi_main$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs_main_confi$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs_confi_main$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs_main_confi$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs_confi_main$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs_main_confi$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs_confi_main$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs_main_confi$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs_confi_main$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs_main_confi$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+imputed_coef_confi_main <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs_confi_main[i]))
+  within_var <- mean(unlist(stan_errs_main_confi[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs_confi_main[i]))^2
+
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_confi_main[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
+
+saveRDS(imputed_coef_confi_main, 'output/imputed_coef_confi_main.RDS')
+```
+
+```{r}
+#same as above -- but now imputing for confidante running models for confidante using all covariates
+imp_coefs_confi <- list()
+stan_errs_confi <- list()
+
+for(i in 1:20){
+ tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)),
+         latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0))) 
+  
+  mod <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long)
+  
+  mod_white <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "White"))
+  
+  mod_latinx <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "LatinX"))
+  
+  mod_black <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Black"))
+  
+  mod_asian <- lmerTest::lmer(cognitive_score ~ confidante_bin + confidante_bin:asian_vrmemz + r_d + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID),                        
+                       REML = FALSE, data = dat_long, subset = (W1_D_RACE_SUMMARY == "Asian"))
+  
+  imp_coefs_confi$full_sample[[i]] <- summary(mod)$coef[2,1]
+  stan_errs_confi$full_sample[[i]] <- summary(mod)$coef[2,2]
+  
+  imp_coefs_confi$white[[i]] <- summary(mod_white)$coef[2,1]
+  stan_errs_confi$white[[i]] <- summary(mod_white)$coef[2,2]
+  
+  imp_coefs_confi$latinx[[i]] <- summary(mod_latinx)$coef[2,1]
+  stan_errs_confi$latinx[[i]] <- summary(mod_latinx)$coef[2,2]
+  
+  imp_coefs_confi$black[[i]] <- summary(mod_black)$coef[2,1]
+  stan_errs_confi$black[[i]] <- summary(mod_black)$coef[2,2]
+  
+  imp_coefs_confi$asian[[i]] <- summary(mod_asian)$coef[2,1]
+  stan_errs_confi$asian[[i]] <- summary(mod_asian)$coef[2,2]
+}
+
+imputed_coef_CI_confi <- list()
+
+for (i in c('full_sample', 'asian', 'black', 'latinx', 'white')){
+  pooled_coeff <- mean(unlist(imp_coefs_confi[i]))
+  within_var <- mean(unlist(stan_errs_confi[i])**2)
+  between_var <- (1 + 1/19) * sd(unlist(imp_coefs_confi[i]))^2
+
+  #pooled error
+  pooled_stand_err <- sqrt(within_var+between_var)
+  
+  lower_ci <- pooled_coeff - 1.96 * pooled_stand_err
+  upper_ci <- pooled_coeff + 1.96 * pooled_stand_err
+
+  imputed_coef_CI_confi[[i]] <- paste0(round(pooled_coeff, 3), " (", round(lower_ci, 3), ", ", round(upper_ci, 3), ")")
+}
+
+saveRDS(imputed_coef_CI_confi, 'output/imputed_coef_CI_confi.RDS')
+```
+
+### Calculating pooled p vals from F-tests (using micombine.F function)
+
+1. Main covariate set  
+
+```{r}
+f_conf <- c()
+for(i in 1:20){
+  print(i)
+  tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)),
+           latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0))) 
+    
+  m_int <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:W1_D_RACE_SUMMARY + 
+                           confidante_bin:asian_vrmemz + 
+                           confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) +
+                           W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
+                         REML = FALSE, data = dat_long)
+  
+  anv <- data.frame(anova(m_int))
+  f_conf[i] <- anv["confidante_bin:W1_D_RACE_SUMMARY", 'F.value']
+}
+
+micombine.F(f_conf, df1=3)
+```
+
+2. Full covariate set 
+
+```{r}
+f_conf_all <- c()
+for(i in 1:20){
+  print(i)
+  tmp_dat <- imp_dat[[i]]
+  
+  dat_long <- tmp_dat %>%
+    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
+    mutate(cognitive_test =  as.factor(cognitive_test),
+           STUDYID = as.factor(STUDYID)) %>%
+    unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+    mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"),
+           asian_vrmemz = as.factor(ifelse(r_d == "Asian_vrmemz", 1, 0)),
+           latin_vrmemz = as.factor(ifelse(r_d == "LatinX_vrmemz", 1, 0))) 
+    
+  m_int<- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:W1_D_RACE_SUMMARY + 
+                           confidante_bin:asian_vrmemz + confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) +
+                           W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + 
+                           retirement_stat + (1|STUDYID),                        
+                         REML = FALSE, data = dat_long)
+  
+  anv <- data.frame(anova(m_int))
+  f_conf_all[i] <- anv["confidante_bin:W1_D_RACE_SUMMARY", 'F.value']
+}
+
+micombine.F(f_conf_all, df1=3)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

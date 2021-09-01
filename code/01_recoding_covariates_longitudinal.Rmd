@@ -1,0 +1,345 @@
+---
+title: "social nets recoding longitudinal"
+output: pdf_document
+---
+
+In this Rmd file, I am making the analysis dataset.  
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, results = 'hide')
+
+library(tidyverse)
+library(dplyr)
+library(haven)
+library(lmerTest)
+library(corrplot)
+library(kableExtra)
+library(formatR)
+library(stargazer)
+library(mice)
+library(tableone)
+library(RColorBrewer)
+
+khandle <- read_sas("/Users/ccalmasini/Dropbox/KHANDLE/Raw KHANDLE Data/Most Recent Raw Data Sets/all waves and MHC/archive/8Jan2021/khandle_all_waves_20210108.sas7bdat")
+
+#checking follow-up length
+khandle %>%
+  mutate(age_diff = mean(W2_INTERVIEW_AGE - W1_INTERVIEW_AGE, na.rm = TRUE)) %>%
+  summarise(mean(age_diff, na.rm = TRUE))
+```
+
+Selecting variables, standardizing W1_SENAS_exec, W1_SENAS_vrmem, W1_SENAS_sem and removing people who have missing values in those measures.
+```{r}
+##Selecting variables
+dat <- khandle %>%
+  dplyr::select(
+    STUDYID,
+    W1_SENAS_exec,
+    W1_SENAS_vrmem,
+    W1_SENAS_sem,
+    W2_SENAS_exec,
+    W2_SENAS_vrmem,
+    W2_SENAS_sem,
+    W1_MARITAL_STATUS,
+    starts_with(c("W1_RELATIVES","W1_FRIENDS", "W1_CHILDREN", "W1_CONFIDANTE", "W1_VOLUNTEER", "W1_INCOME", "W1_ALC", "W1_SMK")),
+    W1_INTERVIEW_AGE,
+    W2_INTERVIEW_AGE,
+    W1_EDU_EDUCATION,
+    W1_EDU_CERT,
+    W1_EDU_LONGCERT,
+    W1_D_EDUCATION,
+    W1_EDU_EDUCATION_TEXT,
+    W1_D_GENDER,
+    W1_NIHTLBX_depr_raw,
+    W1_D_RACE_SUMMARY,
+    starts_with("W1_DAILY_LIVING"),
+    W1_MATERNAL_EDUCATION, W1_MATERNAL_EDUCATION_TEXT,
+    W1_PATERNAL_EDUCATION, W1_PATERNAL_EDUCATION_TEXT,
+    W1_COUNTRY_BORN,
+    W1_EMP_NOTWORKING,
+    W1_EMP_WORKING,
+    W1_EMP_FULLTIME,
+    W1_EMP_PARTTIME,
+    W1_EMP_SUMMARY
+  )
+
+## dropping people with missing wave 1 senas and standardizing scores for all waves
+dat <- dat %>%
+  mutate(execz = scale(W1_SENAS_exec),
+         vrmemz = scale(W1_SENAS_vrmem),
+         semz = scale(W1_SENAS_sem),
+         execz_w2 = scale(W2_SENAS_exec),
+         vrmemz_w2 = scale(W2_SENAS_vrmem),
+         semz_w2 = scale(W2_SENAS_sem)) %>%
+  drop_na(W1_SENAS_exec, W1_SENAS_sem, W1_SENAS_vrmem)
+```
+
+
+## Creating social integration score
+**Variables used**: W1_MARITAL_STATUS, W1_VOLUNTEER_WORK, W1_CHILDREN_NUM, W1_CHILDREN_SEE, W1_CHILDREN_SEE_TEXT, W1_FRIENDS_NUM, W1_FRIENDS_SEE, W1_FRIENDS_SEE_TEXT, W1_RELATIVES_NUM, W1_RELATIVES_SEE, W1_RELATIVES_SEE_TEXT, W1_CONFIDANTE, W1_CONFIDANTE_OFTEN
+
+A score ranging from 0 to 6 was calculated by assigning 1 point for each domain. For marital status, participants received 1 point if they reported being married or living with a partner as if married (W1_MARITAL_STATUS = 1 or 2) and 0 otherwise; for volunteering, participants received 1 point if they spent any time volunteering in the past 12 months and 0 otherwise; for relatives seen, they received 1 point if they have one or more relatives that they see at least once a month and 0 otherwise; for children seen, they received 1 point if they have one or more children that they see at least once a month and 0 otherwise; for friends seen, participants will receive 1 point if they have one or more friends that they see at least once a month and 0 otherwise; for confidante, participants received 1 point they have a confidante that they see daily and 0 otherwise. Participants who reported having no children, no relatives and no friends also received a score of 0.
+
+Removed people who did not answer whether they were married and whether they volunteered in the past 12 months (ie if they were missing W1_MARITAL_STATUS, W1_VOLUNTEER_WORK, W1_CHILDREN_NUM, W1_RELATIVES_NUM, W1_FRIENDS_NUM, W1_CONFIDANTE).
+
+For relatives, children, friends and confidante seen:
+-first they were asked whether they have children (if W1_CHILDREN_NUM = 1, they answered, otherwise they didnt. W1_CHILDREN_NUM_TEXT specifies the actual number of children). Then, if they said the had at least 1 child, they were asked how many of the children they see at least once a month. W1_CHILDREN_SEE just says whether they answered that question and W1_CHILDREN_SEE_TEXT specifies the actual number. so the way i assigned the 1 point is:
+1. if W1_CHILDREN_NUM == 88 or 99 -> remove
+2. if W1_CHILDREN_SEE == 88 or 99 -> remove
+3. if W1_CHILDREN_NUM_TEXT == 0 and W1_CHILDREN_SEE_TEXT == missing -> W1_CHILDREN_SEE_TEXT should be 0.
+4. then i made a binary variable which is equal to 1 if W1_CHILDREN_SEE_TEXT >= 1
+
+-the process was the same for friends, relatives and confidante.
+
+Also removed people who identified as Native American and people who had missing values in any of the SENAS measures.  
+
+I also made a table of the final counts so it could be easier to check.
+
+```{r creating score, echo=FALSE}
+dat <- dat %>%
+  filter(
+    W1_MARITAL_STATUS != 88 & W1_MARITAL_STATUS != 99,
+    W1_VOLUNTEER_WORK != 88 & W1_VOLUNTEER_WORK != 99,
+    W1_CHILDREN_NUM != 88 & W1_CHILDREN_NUM != 99,
+    W1_CHILDREN_SEE != 99 | is.na(W1_CHILDREN_SEE),
+    W1_FRIENDS_NUM != 88 & W1_FRIENDS_NUM != 99,
+    W1_FRIENDS_SEE != 99 | is.na(W1_FRIENDS_SEE),
+    W1_RELATIVES_NUM != 88 & W1_RELATIVES_NUM != 99,
+    W1_RELATIVES_SEE != 99 | is.na(W1_RELATIVES_SEE),
+    W1_CONFIDANTE != 88 & W1_CONFIDANTE != 99,
+    W1_CONFIDANTE_OFTEN != 88 | is.na(W1_CONFIDANTE_OFTEN)
+  ) %>%
+  mutate(
+    marital_bin = ifelse(W1_MARITAL_STATUS == 1 |
+                           W1_MARITAL_STATUS == 2, 1, 0),
+    volunteer_bin = ifelse(W1_VOLUNTEER_WORK == 1, 1, 0),
+    relatives_bin = ifelse(W1_RELATIVES_SEE_TEXT >= 1, 1, 0),
+    children_bin = ifelse(W1_CHILDREN_SEE_TEXT >= 1, 1, 0),
+    friends_bin = ifelse(W1_FRIENDS_SEE_TEXT >= 1, 1, 0),
+    confidante_bin = ifelse(W1_CONFIDANTE_OFTEN == 1, 1, 0),
+    confi_week_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                          W1_CONFIDANTE_OFTEN == 2, 1, 0),
+    confi_month_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                           W1_CONFIDANTE_OFTEN == 2 |
+                           W1_CONFIDANTE_OFTEN == 3, 1, 0),
+    confi_year_mult_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                           W1_CONFIDANTE_OFTEN == 2 |
+                           W1_CONFIDANTE_OFTEN == 3 |
+                          W1_CONFIDANTE_OFTEN == 4, 1, 0),
+    confi_year_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                           W1_CONFIDANTE_OFTEN == 2 |
+                           W1_CONFIDANTE_OFTEN == 3 |
+                          W1_CONFIDANTE_OFTEN == 4 |
+                          W1_CONFIDANTE_OFTEN == 5, 1, 0),
+    confi_week = ifelse(W1_CONFIDANTE_OFTEN == 2, 1, 0),
+    confi_month = ifelse(W1_CONFIDANTE_OFTEN == 3, 1, 0),
+    confi_year_mult = ifelse(W1_CONFIDANTE_OFTEN == 4, 1, 0),
+    confi_year = ifelse(W1_CONFIDANTE_OFTEN == 5, 1, 0)
+  ) %>%
+  replace_na(list(
+    "relatives_bin" = 0,
+    "children_bin" = 0,
+    "friends_bin" = 0,
+    "confidante_bin" = 0,
+    "confi_week" = 0,
+    "confi_month" = 0,
+    "confi_year_mult" = 0,
+    "confi_year" = 0,
+    "confi_week_al" = 0, 
+    "confi_month_al" = 0,
+    "confi_year_mult_al" = 0, 
+    "confi_year_al" = 0
+  )) %>%
+  mutate(int_score = marital_bin + volunteer_bin + relatives_bin + children_bin + friends_bin + confidante_bin)
+
+##filtering native american
+dat <- dat %>%
+  filter(W1_D_RACE_SUMMARY != "Native American")
+```
+# Recoding covariates  
+1. Income: Income was turned into a continuous variable using the upper bound for the category of W1_INCOME_RANGE (rounded up by 1, ie if upper bound was 9999, turn into 10000). If W1_INCOME_RANGE was missing, the most common value based on the binary W1_INCOME_EST category was assigned.
+
+2. smk_status: Smoking status (never smoked, past smoker, current smoker) will be created using W1_SMK_NOW and W1_SMK in the following way:
+ if smk = 0 and smk_now = 0 -> never smoked   
+ if smk = 0 and smk_now = NA -> never smoked    
+ if smk = 1 and smk_now = 0 -> past smoker   
+ if smk = 1 and smk_now = 1 -> current smoker   
+ if smk = 1 and smk_now = 88 -> NA (1)    
+ if smk = 1 and smk_now = NA -> NA (3)    
+ if smk = NA and smk_now = NA -> NA (23)  
+
+```{r income and smk}
+#income and smoke status
+dat <- dat %>%
+  mutate(income_num = case_when(W1_INCOME_RANGE == 1 ~ 10000,
+                                W1_INCOME_RANGE == 2 ~ 15000, 
+                                W1_INCOME_RANGE == 3 ~ 20000, 
+                                W1_INCOME_RANGE == 4 ~ 25000, 
+                                W1_INCOME_RANGE == 5 ~ 35000, 
+                                W1_INCOME_RANGE == 6 ~ 45000,
+                                W1_INCOME_RANGE == 7 ~ 55000,
+                                W1_INCOME_RANGE == 8 ~ 65000,
+                                W1_INCOME_RANGE == 9 ~ 75000,
+                                W1_INCOME_RANGE == 10 ~ 100000,
+                                W1_INCOME_RANGE == 11 ~ 125000,
+                                W1_INCOME_RANGE == 12 ~ 150000,
+                                W1_INCOME_RANGE == 13 ~ 175000, 
+                                ((W1_INCOME_RANGE == 99 | W1_INCOME_RANGE == 88) & W1_INCOME_EST == 1) ~ 55000, 
+                                ((W1_INCOME_RANGE == 99 | W1_INCOME_RANGE == 88) & W1_INCOME_EST == 2) ~ 100000),
+         smk_status = case_when(W1_SMK == 0 & (W1_SMK_NOW == 0 | is.na(W1_SMK_NOW)) ~ "Never smoked",
+                                W1_SMK == 1 & W1_SMK_NOW == 0 ~ "Past smoker",
+                                W1_SMK == 1 & W1_SMK_NOW == 1 ~ "Current smoker"))
+```
+
+2. Education: 0 to 12 years; some college, but no degree = 13 years; associate’s degree= 14 years; bachelor’s degree= 16 years; master’s degree=18 years; doctoral or equivalent degree=20 years. For participants with less than an associate’s degree, vocational degrees and certificates (of >= 6mo of formal training) were counted as an additional year of education. (From Corlier's paper)
+
+```{r education}
+###Recoding education###
+dat <- dat %>%
+  mutate(W1_EDU_new = case_when(W1_EDU_EDUCATION == 1 ~ 13,
+                                W1_EDU_EDUCATION == 2 ~ 14,
+                                W1_EDU_EDUCATION == 3 ~ 16,
+                                W1_EDU_EDUCATION == 4 ~ 18,
+                                W1_EDU_EDUCATION == 5 ~ 20,
+                                W1_EDU_EDUCATION == 88 ~ 88,
+                                W1_EDU_EDUCATION == 99 ~ 99,
+                                W1_EDU_EDUCATION == 0 ~ W1_EDU_EDUCATION_TEXT),
+         W1_EDU_new = ifelse(W1_EDU_new <= 13 & (W1_EDU_LONGCERT == 4 & !is.na(W1_EDU_LONGCERT)), W1_EDU_new+1, W1_EDU_new))
+```
+
+3. Alcohol: 
+Total drinks per week was calculated using W1_ALC, W1_ALC_FREQ and W1_ALC_VOL. Participants who reported not drinking (ie W1_ALC = 0) and had missing values for W1_ALC_FREQ and W1_ALC_VOL were  assigned a value of 1 for both these variables (i.e. in the last 3 months they drank alcohol 0 or less than once a week and in the last 3 months they had no drinks). Total drinks per week was calculated by multiplying W1_ALC_VOL by the midpoint for W1_ALC_FREQ (i.e. 0.5, 3 and 7 days a week for W1_ALC_FREQ = 1, 2 or 3 respectively).
+
+```{r alc}
+###Recoding alcohol###
+dat <- dat %>%
+  mutate(W1_ALC_FREQ_new = case_when(W1_ALC == 0 & (is.na(W1_ALC_FREQ) | W1_ALC_FREQ) == 1 ~ 1,
+                                     TRUE ~ W1_ALC_FREQ),
+         W1_ALC_VOL_new = case_when(W1_ALC == 0 & (is.na(W1_ALC_VOL) | W1_ALC_VOL == 99) ~ 0,
+                                    TRUE ~ W1_ALC_VOL),
+         num_alc_freq = case_when(W1_ALC_FREQ_new == 1 ~ 0.5,
+                                  W1_ALC_FREQ_new == 2 ~ 3,
+                                  W1_ALC_FREQ_new == 3 ~ 7,
+                                  TRUE ~ W1_ALC_FREQ_new),
+         tot_drinks_week = ifelse(num_alc_freq <= 7 & W1_ALC_VOL_new <= 4, W1_ALC_VOL_new * num_alc_freq, NA))
+```
+
+4. ADL/IADL: Treating response 5 (do not do activity) as missing. 
+   * ADL: Average ADL score for participants missing no ADL responses
+   * IADL: Average IADL score for participants missing no IADL responses
+   * ADL_IADL: Average ADL_IADL score for particpants missing no ADL/IADL responses
+  
+```{r iadls}  
+##Using chloe's code
+ADL <- dat %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING_ADL")) %>%
+  mutate(ADL1 = ifelse(W1_DAILY_LIVING_ADL1 >= 1 & W1_DAILY_LIVING_ADL1 <= 4, W1_DAILY_LIVING_ADL1, NA),
+         ADL2 = ifelse(W1_DAILY_LIVING_ADL2 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL2, NA),
+         ADL3 = ifelse(W1_DAILY_LIVING_ADL3 >= 1 & W1_DAILY_LIVING_ADL3 <= 4, W1_DAILY_LIVING_ADL3, NA),
+         ADL4 = ifelse(W1_DAILY_LIVING_ADL4 >= 1 & W1_DAILY_LIVING_ADL4 <= 4, W1_DAILY_LIVING_ADL4, NA),
+         ADL5 = ifelse(W1_DAILY_LIVING_ADL5 >= 1 & W1_DAILY_LIVING_ADL5 <= 4, W1_DAILY_LIVING_ADL5, NA),
+         ADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
+         ADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
+         ADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
+         ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA)) %>%
+  rowwise() %>%
+  mutate(n_miss = sum(is.na(ADL1), is.na(ADL2), is.na(ADL3), is.na(ADL4), is.na(ADL5), is.na(ADL6), is.na(ADL7), is.na(ADL8), is.na(ADL9)),
+         ADL = ifelse(n_miss == 0, sum(ADL1, ADL2, ADL3, ADL4, ADL5, ADL6, ADL7, ADL8, ADL9, na.rm = TRUE)/9, NA)) %>%
+  dplyr::select(STUDYID, ADL)
+
+
+IADL <- dat %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING_IADL")) %>%
+  mutate(IADL1 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
+         IADL2 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
+         IADL3 = ifelse(W1_DAILY_LIVING_IADL3 >= 1 & W1_DAILY_LIVING_IADL3 <= 4, W1_DAILY_LIVING_IADL3, NA)) %>%
+  rowwise() %>%
+  mutate(n_miss = sum(is.na(IADL1), is.na(IADL2), is.na(IADL3)),
+         IADL = ifelse(n_miss == 0, sum(IADL1, IADL2, IADL3, na.rm = TRUE)/3, NA)) %>%
+  dplyr::select(STUDYID, IADL)
+
+
+ADL_IADL <- dat %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING")) %>%
+  mutate(ADL_IADL1 = ifelse(W1_DAILY_LIVING_ADL1 >= 1 & W1_DAILY_LIVING_ADL1 <= 4, W1_DAILY_LIVING_ADL1, NA),
+         ADL_IADL2 = ifelse(W1_DAILY_LIVING_ADL2 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL2, NA),
+         ADL_IADL3 = ifelse(W1_DAILY_LIVING_ADL3 >= 1 & W1_DAILY_LIVING_ADL3 <= 4, W1_DAILY_LIVING_ADL3, NA),
+         ADL_IADL4 = ifelse(W1_DAILY_LIVING_ADL4 >= 1 & W1_DAILY_LIVING_ADL4 <= 4, W1_DAILY_LIVING_ADL4, NA),
+         ADL_IADL5 = ifelse(W1_DAILY_LIVING_ADL5 >= 1 & W1_DAILY_LIVING_ADL5 <= 4, W1_DAILY_LIVING_ADL5, NA),
+         ADL_IADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
+         ADL_IADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
+         ADL_IADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
+         ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA),
+         ADL_IADL10 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
+         ADL_IADL11 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
+         ADL_IADL12 = ifelse(W1_DAILY_LIVING_IADL3 >= 1 & W1_DAILY_LIVING_IADL3 <= 4, W1_DAILY_LIVING_IADL3, NA)) %>%
+  rowwise() %>%
+  mutate(n_miss = sum(is.na(ADL_IADL1), is.na(ADL_IADL2), is.na(ADL_IADL3), is.na(ADL_IADL4), 
+                      is.na(ADL_IADL5), is.na(ADL_IADL6), is.na(ADL_IADL7), is.na(ADL_IADL8), 
+                      is.na(ADL_IADL9), is.na(ADL_IADL10), is.na(ADL_IADL11), is.na(ADL_IADL12)),
+         ADL_IADL = ifelse(n_miss == 0, sum(ADL_IADL1, ADL_IADL2, ADL_IADL3, ADL_IADL4, ADL_IADL5, 
+                                            ADL_IADL6, ADL_IADL7, ADL_IADL8, ADL_IADL9, 
+                                            ADL_IADL10, ADL_IADL11, ADL_IADL12, na.rm = TRUE)/12, NA)) %>%
+  dplyr::select(STUDYID, ADL_IADL)
+
+
+dat <- dat %>%
+  inner_join(ADL, by = "STUDYID") %>%
+  inner_join(IADL, by = "STUDYID") %>%
+  inner_join(ADL_IADL, by = "STUDYID")
+```
+
+5. Retirement status
+
+Classified as retired if they reported being retired (W1_EMP_NOTWORKING=1).
+Classified as not retired if they reporte working (W1_EMP_WORKING=1), working full-time (W1_EMP_FULLTIME) or part-time (W1_EMP_PARTTIME)
+```{r retirement status}
+dat <- dat %>%
+  mutate(retirement_stat = case_when(W1_EMP_NOTWORKING == 1 ~ "Retired",
+                                     W1_EMP_WORKING == 1 ~ "Not retired",
+                                     W1_EMP_FULLTIME == 1 ~ "Not retired",
+                                     W1_EMP_PARTTIME == 1 ~ "Not retired"))
+```
+
+## Final dataset
+
+```{r}
+#final datasets with variables of interest
+final_dat <- dat %>%
+  dplyr::select(STUDYID,
+         marital_bin,
+         volunteer_bin, 
+         relatives_bin,
+         children_bin,
+         friends_bin,
+         confidante_bin,
+         W1_CONFIDANTE,
+         W1_CONFIDANTE_OFTEN,
+         confi_week_al,
+         confi_month_al,
+         confi_year_mult_al,
+         confi_year_al,
+         confi_week,
+         confi_month,
+         confi_year_mult,
+         confi_year,
+         W1_INTERVIEW_AGE, 
+         W2_INTERVIEW_AGE,
+         W1_EDU_new, 
+         W1_D_GENDER, 
+         W1_D_RACE_SUMMARY, 
+         income_num, 
+         tot_drinks_week,
+         smk_status,
+         W1_SMK,
+         int_score,
+         IADL,
+         ADL,
+         ADL_IADL,
+         retirement_stat,
+         execz, vrmemz, semz,
+         execz_w2, vrmemz_w2, semz_w2)%>%
+  mutate_all(~replace(., . == 99 | . == 88, NA))
+
+write.csv(final_dat, "social_nets_dat_both_waves.csv")
+```
