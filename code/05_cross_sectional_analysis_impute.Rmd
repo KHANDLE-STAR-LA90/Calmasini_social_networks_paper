@@ -74,7 +74,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+          income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -153,7 +154,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -227,7 +229,8 @@ for(i in 1:20){
   tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -258,7 +261,8 @@ for(i in 1:20){
   tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -292,7 +296,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -365,7 +370,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -440,7 +446,8 @@ for(i in 1:20){
   tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%
@@ -471,7 +478,8 @@ for(i in 1:20){
   tmp_dat <- imp_dat[[i]]
   
   dat_long <- tmp_dat %>%
-    mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+    mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+           income_num_c = log(income_num)) %>%
     gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
     mutate(cognitive_test =  as.factor(cognitive_test),
            STUDYID = as.factor(STUDYID)) %>%

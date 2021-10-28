@@ -38,10 +38,35 @@ impute_tab_main_covars <- rbind(imputed_int_score_dt_main$full_sample,
                                 imputed_int_score_dt_main$latinx,
                                 imputed_int_score_dt_main$white)
 
-table_int_score_long <- cbind(int_score_main_tab, impute_tab_main_covars[,-2], int_score_all_tab[,-1], impute_tab[,-2])
+# complete case
+tab_int_score_long <- cbind(int_score_main_tab, 
+                            int_score_all_tab[,-1])
 
-kable(table_int_score_long, format = "html", booktabs = TRUE, align = c("l", "c", "c", "c", "c"),
-      col.names = c(" ", "Core covariates", "Core - imputed", "Enhanced covariates", "Enhanced imputated"), escape = FALSE) %>%
+kable(tab_int_score_long, format = "html", 
+      booktabs = TRUE, align = c("l", "c", "c"),
+      col.names = c(" ", "Core", "Enhanced"), escape = FALSE) %>%
+  kable_styling() %>%
+  column_spec(1, width = "4cm") %>%
+  column_spec(2, width = "3.5cm")%>%
+  column_spec(3, width = "3.5cm")%>%
+  #column_spec(2, width = "4cm") %>%
+  pack_rows("Overall", 1, 4, bold = TRUE) %>%
+  pack_rows("Asian", 5, 8, bold = TRUE) %>%
+  pack_rows("Black", 9, 12, bold = TRUE) %>%
+  pack_rows("Latinx", 13, 16, bold = TRUE)%>%
+  pack_rows("White", 17, 20, bold = TRUE)%>%
+  readr::write_file("Tables/w1w2_regressions_int_score.html")
+
+# imputed
+impute_tab_main_covars <- impute_tab_main_covars %>%
+  mutate(variable2 = variable,
+         .before = coefs)
+
+table_int_score_long_imp <- cbind(impute_tab_main_covars[,-3], 
+                                  impute_tab[,-2])
+
+kable(table_int_score_long_imp, format = "html", booktabs = TRUE, align = c("l", "c", "c"),
+      col.names = c(" ", "Core - imputed", "Enhanced - imputed"), escape = FALSE) %>%
   kable_styling() %>%
   column_spec(1, width = "4cm") %>%
   column_spec(2, width = "3.5cm")%>%
@@ -52,7 +77,7 @@ kable(table_int_score_long, format = "html", booktabs = TRUE, align = c("l", "c"
   pack_rows("Black", 7, 9, bold = TRUE) %>%
   pack_rows("Latinx", 10, 12, bold = TRUE)%>%
   pack_rows("White", 13, 15, bold = TRUE)%>%
-  readr::write_file("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1w2_regressions_int_score.html")
+  readr::write_file("Tables/w1w2_regressions_int_score_impute.html")
 
 #---- confidante models -----
 # complete case
@@ -90,16 +115,43 @@ impute_tab_confi_main <- rbind(imputed_coef_dt_main$full_sample,
                                imputed_coef_dt_main$latinx,
                                imputed_coef_dt_main$white)
 
-table_confi_long <- cbind(table_confi_main, impute_tab_confi_main[,-2], 
-                          table_confi_all[,-1], impute_tab_confi[, -2])
+table_confi_long <- cbind(table_confi_main, 
+                          table_confi_all[,-1])
 
+# complete case
 kable(table_confi_long, 
       format = "html", 
       booktabs = TRUE, 
       align = c("l", "c", "c"),
       col.names = linebreak(c(" ", "Core covariates", 
-                              "Core covariates - imputed", 
-                              "Enhanced covariates", "Enhanced - Imputed")), 
+                              "Enhanced covariates")), 
+      escape = FALSE) %>%
+  kable_styling() %>%
+  column_spec(1, width = "4cm") %>%
+  column_spec(2, width = "3.5cm")%>%
+  column_spec(3, width = "3.5cm")%>%
+  #column_spec(2, width = "4cm") %>%
+  pack_rows("Overall", 1, 4, bold = TRUE) %>%
+  pack_rows("Asian", 5, 8, bold = TRUE) %>%
+  pack_rows("Black", 9, 12, bold = TRUE) %>%
+  pack_rows("Latinx", 13, 16, bold = TRUE)%>%
+  pack_rows("White", 17, 20, bold = TRUE)%>%
+  readr::write_file("Tables/w1w2_regressions_confi.html")
+
+# imputed
+impute_tab_confi_main <- impute_tab_confi_main %>%
+  mutate(variable2 = variable,
+         .before = coefs)
+
+table_confi_long_imp <- cbind(impute_tab_confi_main[,-3], 
+                              impute_tab_confi[,-2])
+
+kable(table_confi_long_imp, 
+      format = "html", 
+      booktabs = TRUE, 
+      align = c("l", "c", "c"),
+      col.names = linebreak(c(" ", "Core - impute", 
+                              "Enhanced - impute")), 
       escape = FALSE) %>%
   kable_styling() %>%
   column_spec(1, width = "4cm") %>%
@@ -111,8 +163,4 @@ kable(table_confi_long,
   pack_rows("Black", 7, 9, bold = TRUE) %>%
   pack_rows("Latinx", 10, 12, bold = TRUE)%>%
   pack_rows("White", 13, 15, bold = TRUE)%>%
-  readr::write_file("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1w2_regressions_confi.html")
-
-
-
-
+  readr::write_file("Tables/w1w2_regressions_confi_imp.html")

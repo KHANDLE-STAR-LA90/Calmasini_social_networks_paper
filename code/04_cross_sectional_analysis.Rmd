@@ -58,7 +58,8 @@ khandle1 <- final_dat_both %>%
 #each person is repeated 3 times: one for execz, one for vrmemz an and one for semz
 #make a r_d variable which combines race and cognitive domain
 khandle1_long <- khandle1 %>%
-  mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+         income_num_c = log(income_num)) %>%
   gather(cognitive_test, cognitive_score, c(execz, vrmemz, semz)) %>%
   mutate(cognitive_test =  as.factor(cognitive_test),
          STUDYID = as.factor(STUDYID)) %>%
@@ -232,7 +233,13 @@ for(i in c("White", "Black", "LatinX", "Asian")){
                        REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
   }
   
-  stargazer(summary(mod_all)$coef, type = "text", title = paste("Regression for", i,  "participants -- integration score, enhanced covariates"))
+  stargazer(summary(mod_all)$coef, 
+            mod_all,
+            ci = T,
+            type = "text", 
+            title = paste("Regression for", 
+                          i,  
+                          "participants -- integration score, enhanced covariates"))
   
   tables_all_covars[[i]] <- make_table(mod_all)
 }
@@ -268,7 +275,9 @@ m_main_confidante_overall <- lmerTest::lmer(cognitive_score ~ confidante_bin + r
                                          W1_D_GENDER + W1_EDU_new_c + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long)
 
-stargazer(summary(m_main_confidante_overall)$coef, type = "text", title = "Confidante regression for full sample using main covars")
+stargazer(summary(m_main_confidante_overall)$coef, 
+          type = "text", 
+          title = "Confidante regression for full sample using main covars")
 
 table1_confi <- make_table(m_main_confidante_overall)
 saveRDS(table1_confi, 'output/table1_confi.RDS')
@@ -319,7 +328,7 @@ saveRDS(tables_main_covars_confi, 'output/tables_main_covars_confi.RDS')
 ## Confidante models adjusting for all covariates
 
 ```{r conf full sample}
-m_confidante_overall <- lmerTest::lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + 
+m_confidante_overall <- lmer(cognitive_score ~ confidante_bin + r_d + confidante_bin:asian_vrmemz + 
                                          confidante_bin:latin_vrmemz + poly(years_over_65, 2, raw = TRUE) + 
                                          W1_D_GENDER + W1_EDU_new_c + ADL_IADL + income_num_c + tot_drinks_week + retirement_stat + (1|STUDYID), 
                                        REML = FALSE, data = khandle1_long)
@@ -361,9 +370,12 @@ for(i in c("White", "Black", "LatinX", "Asian")){
                                     REML = FALSE, data = khandle1_long, subset = (W1_D_RACE_SUMMARY == i))
   }
   
-  stargazer(summary(mod_all_confi)$coef, type = "text", title = paste("Confidante regression for", i,  "participants using all covariates"))
+  #class(mod_all_confi) <- 'lmerMod'
+  stargazer(summary(mod_all_confi)$coef, 
+            #mod_all_confi, ci = T,
+            type = "text", title = paste("Confidante regression for", i,  "participants using all covariates"))
   
-  tables_all_covars_confi[[i]] <- make_table(mod_all_confi)
+  #tables_all_covars_confi[[i]] <- make_table(mod_all_confi)
 }
 
 saveRDS(tables_all_covars_confi, 'output/tables_all_covars_confi.RDS')

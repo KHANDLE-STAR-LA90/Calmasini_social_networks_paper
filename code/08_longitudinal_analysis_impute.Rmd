@@ -84,7 +84,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
  dat_long <- tmp_dat %>%
-  mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+         income_num_c = log(income_num)) %>%
   gather(wave, cognitive_score, c(execz, execz_w2, vrmemz, vrmemz_w2, semz, semz_w2)) %>%
   mutate(cognitive_test = case_when(wave == "execz" | wave == "execz_w2" ~ "execz",
                                    wave == "semz" | wave == "semz_w2" ~ "semz",
@@ -196,7 +197,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
  dat_long <- tmp_dat %>%
-  mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+         income_num_c = log(income_num)) %>%
   gather(wave, cognitive_score, c(execz, execz_w2, vrmemz, vrmemz_w2, semz, semz_w2)) %>%
   mutate(cognitive_test = case_when(wave == "execz" | wave == "execz_w2" ~ "execz",
                                    wave == "semz" | wave == "semz_w2" ~ "semz",
@@ -309,7 +311,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
  dat_long <- tmp_dat %>%
-  mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+         income_num_c = log(income_num)) %>%
   gather(wave, cognitive_score, c(execz, execz_w2, vrmemz, vrmemz_w2, semz, semz_w2)) %>%
   mutate(cognitive_test = case_when(wave == "execz" | wave == "execz_w2" ~ "execz",
                                    wave == "semz" | wave == "semz_w2" ~ "semz",
@@ -421,7 +424,8 @@ for(i in 1:20){
  tmp_dat <- imp_dat[[i]]
   
  dat_long <- tmp_dat %>%
-  mutate(income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  mutate(#income_num_c = scale(income_num, center = TRUE, scale = TRUE),
+         income_num_c = log(income_num)) %>%
   gather(wave, cognitive_score, c(execz, execz_w2, vrmemz, vrmemz_w2, semz, semz_w2)) %>%
   mutate(cognitive_test = case_when(wave == "execz" | wave == "execz_w2" ~ "execz",
                                    wave == "semz" | wave == "semz_w2" ~ "semz",

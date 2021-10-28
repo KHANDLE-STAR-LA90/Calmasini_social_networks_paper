@@ -68,9 +68,13 @@ dat <- dat %>%
   mutate(execz = scale(W1_SENAS_exec),
          vrmemz = scale(W1_SENAS_vrmem),
          semz = scale(W1_SENAS_sem),
+         # execz_w2 = (W2_SENAS_exec - 0.2673017)/0.7722371,
+         # vrmemz_w2 = (W2_SENAS_vrmem - 0.2673017)/0.7722371,
+         # semz_w2 = (W2_SENAS_sem - 0.2673017)/0.7722371,
          execz_w2 = scale(W2_SENAS_exec),
          vrmemz_w2 = scale(W2_SENAS_vrmem),
-         semz_w2 = scale(W2_SENAS_sem)) %>%
+         semz_w2 = scale(W2_SENAS_sem)
+         ) %>%
   drop_na(W1_SENAS_exec, W1_SENAS_sem, W1_SENAS_vrmem)
 ```
 

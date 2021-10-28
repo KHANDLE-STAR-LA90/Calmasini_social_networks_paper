@@ -43,7 +43,7 @@ kable(table_int_score, format = "html", booktabs = FALSE, align = c("l", "c", "c
   pack_rows(" ", 3, 3) %>%
   pack_rows(" ", 4, 4) %>%
   pack_rows(" ", 5, 5) %>%
-  readr::write_file("/Users/ccalmasini/Desktop/Projects/social_networks_paper/Tables/w1_regressions_int_score.html")
+  readr::write_file("Tables/w1_regressions_int_score.html")
 
 #---- confidante models ----
 
@@ -77,7 +77,7 @@ table_confi <- cbind(confi_main_tab, confi_impute_main, confi_all_tab, confi_imp
 
 rownames(table_confi) <- c("Overall", "Asian", "Black", "LatinX", "White")
 
-write.csv(table_confi, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_confi.csv")
+#write.csv(table_confi, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_confi.csv")
 
 kable(table_confi, format = "html", booktabs = FALSE, align = c("l", "c", "c"),
       col.names = c("Core covariates beta (95% CI)", "Core - imputed", "Enhanced covariates beta (95% CI)", "Enhanced - imputed"), escape = FALSE) %>%
@@ -89,7 +89,7 @@ kable(table_confi, format = "html", booktabs = FALSE, align = c("l", "c", "c"),
   pack_rows(" ", 3, 3) %>%
   pack_rows(" ", 4, 4) %>%
   pack_rows(" ", 5, 5) %>%
-  readr::write_file("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/w1_regressions_confi.html")
+  readr::write_file("Tables/w1_regressions_confi.html")
 
 
 
