@@ -1,0 +1,203 @@
+---
+title: "models for excluded groups"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+final_dat <- read.csv("/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/social_nets_dat_both_waves.csv")
+
+#centering education at 12 and age at 65
+#turning variables into factors
+#dropping nas for complete case analysis
+khandle1 <- final_dat %>%
+  mutate(W1_EDU_new_c = W1_EDU_new - 12,
+         W1_D_GENDER = factor(case_when(W1_D_GENDER == 1 ~ "Male",
+                                        W1_D_GENDER == 2 ~ "Female")),
+         W1_SMK = ifelse(W1_SMK == 0, "No", "Yes"),
+         years_over_65 = W1_INTERVIEW_AGE - 65,
+         income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  drop_na(W1_EDU_new_c, income_num, ADL_IADL, tot_drinks_week, retirement_stat)
+
+khandle1_long <- final_dat %>%
+  mutate(W1_EDU_new_c = W1_EDU_new - 12,
+         W1_D_GENDER = factor(case_when(W1_D_GENDER == 1 ~ "Male",
+                                        W1_D_GENDER == 2 ~ "Female")),
+         W1_SMK = ifelse(W1_SMK == 0, "No", "Yes"),
+         years_over_65 = W1_INTERVIEW_AGE - 65,
+         income_num_c = scale(income_num, center = TRUE, scale = TRUE)) %>%
+  gather(wave, cognitive_score, c(execz, execz_w2, vrmemz, vrmemz_w2, semz, semz_w2)) %>%
+  mutate(cognitive_test = case_when(wave == "execz" | wave == "execz_w2" ~ "execz",
+                                   wave == "semz" | wave == "semz_w2" ~ "semz",
+                                   wave == "vrmemz" | wave == "vrmemz_w2" ~ "vrmemz"),
+         wave = case_when(wave %in% c("execz", "semz", "vrmemz") ~ "wave1",
+                          wave %in% c("execz_w2", "semz_w2", "vrmemz_w2") ~ "wave2")) %>%
+  mutate(cognitive_test =  as.factor(cognitive_test),
+         STUDYID = as.factor(STUDYID)) %>%
+  unite(r_d, W1_D_RACE_SUMMARY, cognitive_test, remove = FALSE) %>%
+  mutate(r_d = relevel(as.factor(r_d), ref = "Asian_execz"))
+
+
+asian <- khandle1 %>%
+  filter(W1_D_RACE_SUMMARY ==  "Asian")
+
+latino <- khandle1 %>%
+  filter(W1_D_RACE_SUMMARY ==  "LatinX")
+
+asian_long <- khandle1_long %>%
+  filter(W1_D_RACE_SUMMARY ==  "Asian" & cognitive_test == "vrmemz")
+
+latino_long <- khandle1_long %>%
+  filter(W1_D_RACE_SUMMARY ==  "LatinX" & cognitive_test == "vrmemz")
+```
+
+# Regression of vrmemz on integration score for Asian participants
+```{r}
+mod1_asian <- lm(vrmemz ~ int_score + poly(years_over_65, 2, raw = TRUE) + W1_D_GENDER +
+                       W1_EDU_new_c, data = asian)
+
+mod2_asian <- lm(vrmemz ~ int_score + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat, data = asian)
+
+stargazer(mod1_asian, mod2_asian, type='html', ci = TRUE, 
+          title = 'Regression of vrmemz on integration score for Asian participants', 
+          out = '/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/asian_vrmemz.html')
+
+```
+
+# Regression of vrmemz on confidante for Asian participants
+
+```{r}
+mod1c_asian <- lm(vrmemz ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + W1_D_GENDER +
+                       W1_EDU_new_c, data = asian)
+
+summary(mod1c_asian)
+
+mod2c_asian <- lm(vrmemz ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat, data = asian)
+
+summary(mod2c_asian)
+
+stargazer(mod1c_asian, mod2c_asian, type='html', ci = TRUE, title = 'Regression of vrmemz on confidante for Asian participants', out = '/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/asian_vrmemz_confidante.html')
+
+#table for both
+stargazer(mod1_asian, mod2_asian, mod1c_asian, mod2c_asian, type='text', ci = TRUE, 
+          title = 'Regression of vrmemz on integration score (1, 2) and confidante (3, 4) for Asian participants', 
+          out = '/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/asian_wave1.txt')
+```
+
+# Regression of vrmemz on int_score for Asian using wave 1 and wave 2
+
+```{r}
+mod1_long_asian <- lmerTest::lmer(cognitive_score ~ int_score + poly(years_over_65, 2, raw = TRUE) + int_score:years_over_65 + W1_D_GENDER +
+                                    W1_EDU_new_c + (1|STUDYID), 
+                                  REML = FALSE, 
+                                  data = asian_long)
+
+mod2_long_asian <- lmerTest::lmer(cognitive_score ~ int_score + poly(years_over_65, 2, raw = TRUE) + int_score:years_over_65 +
+                                    W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
+                                  REML = FALSE, 
+                                  data = asian_long)
+
+stargazer(summary(mod1_long_asian)$coef, summary(mod2_long_asian)$coef, 
+          type = "html", ci = TRUE, 
+          title = "Regression of vrmemz on integration score for Asian participants using w1 and w2 data", 
+          out = "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/asian_vrmemz_int_score_both_waves.html")
+
+
+```
+
+# Regression of vrmemz on confidante for Asian using wave 1 and wave 2
+
+```{r}
+mod1c_long_asian <- lmerTest::lmer(cognitive_score ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + confidante_bin:years_over_65 + W1_D_GENDER +
+                                    W1_EDU_new_c + (1|STUDYID), 
+                                  REML = FALSE, 
+                                  data = asian_long)
+
+mod2c_long_asian <- lmerTest::lmer(cognitive_score ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + confidante_bin:years_over_65 +
+                                    W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
+                                  REML = FALSE, 
+                                  data = asian_long)
+
+stargazer(summary(mod1c_long_asian)$coef, summary(mod2c_long_asian)$coef, type = "html", 
+          ci = TRUE, title = "Regression of vrmemz on confidante for Asian participants using w1 and w2 data", 
+          out = "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/asian_vrmemz_confidante_both_waves.html")
+
+main_covars_asian <- rbind('int_score' = summary(mod1_asian)$coef["int_score",], 
+                           'confidante' = summary(mod1c_asian)$coef["confidante_bin",],
+                           'int_score_long' = summary(mod1_long_asian)$coef["int_score", -3],
+                           'age_long' = summary(mod1_long_asian)$coef["poly(years_over_65, 2, raw = TRUE)1",-3],
+                           'intscorexage' = summary(mod1_long_asian)$coef["int_score:years_over_65",-3], 
+                           'confi_long' = summary(mod1c_long_asian)$coef["confidante_bin", -3],
+                           'age' = summary(mod1c_long_asian)$coef["poly(years_over_65, 2, raw = TRUE)1",-3],
+                           'confixage' = summary(mod1c_long_asian)$coef["confidante_bin:years_over_65",-3]) %>% round(3)
+
+all_covars_asian <- rbind('int_score' = summary(mod2_asian)$coef["int_score",], 
+                           'confidante' = summary(mod2c_asian)$coef["confidante_bin",],
+                           'int_score_long' = summary(mod2_long_asian)$coef["int_score", -3],
+                           'age_long' = summary(mod2_long_asian)$coef["poly(years_over_65, 2, raw = TRUE)1",-3],
+                           'intscorexage' = summary(mod2_long_asian)$coef["int_score:years_over_65",-3], 
+                           'confi_long' = summary(mod2c_long_asian)$coef["confidante_bin", -3],
+                           'age'  = summary(mod2c_long_asian)$coef["poly(years_over_65, 2, raw = TRUE)1",-3],
+                           'confixage' = summary(mod2c_long_asian)$coef["confidante_bin:years_over_65",-3]) %>% round(3)
+
+asian_vrmemz <- cbind(main_covars_asian, all_covars_asian)
+write.csv(asian_vrmemz, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/asian_vrmemz.csv")
+```
+
+# Regression of vrmemz on confidante for latinos
+
+```{r}
+mod1c_latin <- lm(vrmemz ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + W1_D_GENDER +
+                       W1_EDU_new_c, data = latino)
+
+summary(mod1c_latin)
+
+mod2c_latin <- lm(vrmemz ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + 
+                       W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat, data = latino)
+
+summary(mod2c_latin)
+
+stargazer(mod1c_latin, mod2c_latin, 
+          type='html', ci = TRUE, 
+          title = 'Regression of vrmemz on confidante for Latino participants', 
+          out = '/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/latin_confidante.html')
+```
+
+# Regression of vrmemz on confidante for latinos using wave 1 and wave 2
+
+```{r}
+mod1c_long_latino <- lmerTest::lmer(cognitive_score ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + confidante_bin:years_over_65 + W1_D_GENDER +
+                                    W1_EDU_new_c + (1|STUDYID), 
+                                  REML = FALSE, 
+                                  data = latino_long)
+
+mod2c_long_latino <- lmerTest::lmer(cognitive_score ~ confidante_bin + poly(years_over_65, 2, raw = TRUE) + confidante_bin:years_over_65 +
+                                    W1_D_GENDER + W1_EDU_new_c + ADL_IADL + tot_drinks_week + income_num_c + retirement_stat + (1|STUDYID), 
+                                  REML = FALSE, 
+                                  data = latino_long)
+
+stargazer(summary(mod1c_long_latino)$coef, summary(mod2c_long_latino)$coef, 
+          type = "html", ci = TRUE, 
+          title = "Regression of vrmemz on confidante for Latino participants using w1 and w2 data", 
+          out = "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/latin_confidante_both_waves.html")
+```
+
+```{r}
+main_covars_latino <- rbind('confidante' = summary(mod1c_latin)$coef["confidante_bin",],
+                           'confi_long' = summary(mod1c_long_latino)$coef["confidante_bin", -3],
+                           'age' = summary(mod1c_long_latino)$coef["poly(years_over_65, 2, raw = TRUE)1",-3],
+                           'confixage' = summary(mod1c_long_latino)$coef["confidante_bin:years_over_65",-3]) %>% round(3)
+
+all_covars_latino <- rbind('confidante' = summary(mod2c_latin)$coef["confidante_bin",],
+                           'confi_long' = summary(mod2c_long_latino)$coef["confidante_bin", -3],
+                           'age'  = summary(mod2c_long_latino)$coef["poly(years_over_65, 2, raw = TRUE)1",-3],
+                           'confixage' = summary(mod2c_long_latino)$coef["confidante_bin:years_over_65",-3]) %>% round(3)
+
+latin_vrmemz <- cbind(main_covars_latino, all_covars_latino)
+write.csv(latin_vrmemz, "/Users/ccalmasini/Desktop/Camilla KHANDLE/social_networks_paper/Tables/latin_vrmemz.csv")
+```

@@ -1,7 +1,9 @@
 ---
-title: "social nets recoding vars"
+title: "social nets recoding longitudinal"
 output: pdf_document
 ---
+
+In this Rmd file, I am making the analysis dataset.  
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, results = 'hide')
@@ -18,23 +20,30 @@ library(mice)
 library(tableone)
 library(RColorBrewer)
 
-# khandle <- read_sas("/Users/ccalmasini/Desktop/Camilla KHANDLE/Datasets/khandle_baseline_20201029.sas7bdat")
+khandle <- read_sas("/Users/ccalmasini/Dropbox/KHANDLE/Raw KHANDLE Data/Most Recent Raw Data Sets/all waves and MHC/archive/8Jan2021/khandle_all_waves_20210108.sas7bdat")
 
-khandle <- read_sas("../../Dropbox/KHANDLE/Raw KHANDLE Data/Most Recent Raw Data Sets/archive/29Oct2020/khandle_baseline_20201029.sas7bdat")
+#checking follow-up length
+khandle %>%
+  mutate(age_diff = mean(W2_INTERVIEW_AGE - W1_INTERVIEW_AGE, na.rm = TRUE)) %>%
+  summarise(mean(age_diff, na.rm = TRUE))
 ```
 
 Selecting variables, standardizing W1_SENAS_exec, W1_SENAS_vrmem, W1_SENAS_sem and removing people who have missing values in those measures.
 ```{r}
 ##Selecting variables
 dat <- khandle %>%
-  select(
+  dplyr::select(
     STUDYID,
     W1_SENAS_exec,
     W1_SENAS_vrmem,
     W1_SENAS_sem,
+    W2_SENAS_exec,
+    W2_SENAS_vrmem,
+    W2_SENAS_sem,
     W1_MARITAL_STATUS,
     starts_with(c("W1_RELATIVES","W1_FRIENDS", "W1_CHILDREN", "W1_CONFIDANTE", "W1_VOLUNTEER", "W1_INCOME", "W1_ALC", "W1_SMK")),
     W1_INTERVIEW_AGE,
+    W2_INTERVIEW_AGE,
     W1_EDU_EDUCATION,
     W1_EDU_CERT,
     W1_EDU_LONGCERT,
@@ -46,19 +55,31 @@ dat <- khandle %>%
     starts_with("W1_DAILY_LIVING"),
     W1_MATERNAL_EDUCATION, W1_MATERNAL_EDUCATION_TEXT,
     W1_PATERNAL_EDUCATION, W1_PATERNAL_EDUCATION_TEXT,
-    W1_COUNTRY_BORN
+    W1_COUNTRY_BORN,
+    W1_EMP_NOTWORKING,
+    W1_EMP_WORKING,
+    W1_EMP_FULLTIME,
+    W1_EMP_PARTTIME,
+    W1_EMP_SUMMARY
   )
 
-## dropping people with missing senas and standardizing scores
+## dropping people with missing wave 1 senas and standardizing scores for all waves
 dat <- dat %>%
   mutate(execz = scale(W1_SENAS_exec),
          vrmemz = scale(W1_SENAS_vrmem),
-         semz = scale(W1_SENAS_sem)) %>%
+         semz = scale(W1_SENAS_sem),
+         # execz_w2 = (W2_SENAS_exec - 0.2673017)/0.7722371,
+         # vrmemz_w2 = (W2_SENAS_vrmem - 0.2673017)/0.7722371,
+         # semz_w2 = (W2_SENAS_sem - 0.2673017)/0.7722371,
+         execz_w2 = scale(W2_SENAS_exec),
+         vrmemz_w2 = scale(W2_SENAS_vrmem),
+         semz_w2 = scale(W2_SENAS_sem)
+         ) %>%
   drop_na(W1_SENAS_exec, W1_SENAS_sem, W1_SENAS_vrmem)
 ```
 
 
-## Creating score
+## Creating social integration score
 **Variables used**: W1_MARITAL_STATUS, W1_VOLUNTEER_WORK, W1_CHILDREN_NUM, W1_CHILDREN_SEE, W1_CHILDREN_SEE_TEXT, W1_FRIENDS_NUM, W1_FRIENDS_SEE, W1_FRIENDS_SEE_TEXT, W1_RELATIVES_NUM, W1_RELATIVES_SEE, W1_RELATIVES_SEE_TEXT, W1_CONFIDANTE, W1_CONFIDANTE_OFTEN
 
 A score ranging from 0 to 6 was calculated by assigning 1 point for each domain. For marital status, participants received 1 point if they reported being married or living with a partner as if married (W1_MARITAL_STATUS = 1 or 2) and 0 otherwise; for volunteering, participants received 1 point if they spent any time volunteering in the past 12 months and 0 otherwise; for relatives seen, they received 1 point if they have one or more relatives that they see at least once a month and 0 otherwise; for children seen, they received 1 point if they have one or more children that they see at least once a month and 0 otherwise; for friends seen, participants will receive 1 point if they have one or more friends that they see at least once a month and 0 otherwise; for confidante, participants received 1 point they have a confidante that they see daily and 0 otherwise. Participants who reported having no children, no relatives and no friends also received a score of 0.
@@ -99,30 +120,46 @@ dat <- dat %>%
     relatives_bin = ifelse(W1_RELATIVES_SEE_TEXT >= 1, 1, 0),
     children_bin = ifelse(W1_CHILDREN_SEE_TEXT >= 1, 1, 0),
     friends_bin = ifelse(W1_FRIENDS_SEE_TEXT >= 1, 1, 0),
-    confidante_bin = ifelse(W1_CONFIDANTE_OFTEN == 1, 1, 0)
+    confidante_bin = ifelse(W1_CONFIDANTE_OFTEN == 1, 1, 0),
+    confi_week_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                          W1_CONFIDANTE_OFTEN == 2, 1, 0),
+    confi_month_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                           W1_CONFIDANTE_OFTEN == 2 |
+                           W1_CONFIDANTE_OFTEN == 3, 1, 0),
+    confi_year_mult_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                           W1_CONFIDANTE_OFTEN == 2 |
+                           W1_CONFIDANTE_OFTEN == 3 |
+                          W1_CONFIDANTE_OFTEN == 4, 1, 0),
+    confi_year_al = ifelse(W1_CONFIDANTE_OFTEN == 1 |
+                           W1_CONFIDANTE_OFTEN == 2 |
+                           W1_CONFIDANTE_OFTEN == 3 |
+                          W1_CONFIDANTE_OFTEN == 4 |
+                          W1_CONFIDANTE_OFTEN == 5, 1, 0),
+    confi_week = ifelse(W1_CONFIDANTE_OFTEN == 2, 1, 0),
+    confi_month = ifelse(W1_CONFIDANTE_OFTEN == 3, 1, 0),
+    confi_year_mult = ifelse(W1_CONFIDANTE_OFTEN == 4, 1, 0),
+    confi_year = ifelse(W1_CONFIDANTE_OFTEN == 5, 1, 0)
   ) %>%
   replace_na(list(
     "relatives_bin" = 0,
     "children_bin" = 0,
     "friends_bin" = 0,
-    "confidante_bin" = 0
+    "confidante_bin" = 0,
+    "confi_week" = 0,
+    "confi_month" = 0,
+    "confi_year_mult" = 0,
+    "confi_year" = 0,
+    "confi_week_al" = 0, 
+    "confi_month_al" = 0,
+    "confi_year_mult_al" = 0, 
+    "confi_year_al" = 0
   )) %>%
   mutate(int_score = marital_bin + volunteer_bin + relatives_bin + children_bin + friends_bin + confidante_bin)
 
 ##filtering native american
 dat <- dat %>%
   filter(W1_D_RACE_SUMMARY != "Native American")
-
-#table to check
-dat %>%
-  group_by("Social integration score" = int_score, "Race" = W1_D_RACE_SUMMARY) %>%
-  tally() %>%
-  spread(Race, n) %>%
-  ungroup()%>%
-  mutate(total = rowSums(select(., -1)))
 ```
-
-
 # Recoding covariates  
 1. Income: Income was turned into a continuous variable using the upper bound for the category of W1_INCOME_RANGE (rounded up by 1, ie if upper bound was 9999, turn into 10000). If W1_INCOME_RANGE was missing, the most common value based on the binary W1_INCOME_EST category was assigned.
 
@@ -191,7 +228,7 @@ dat <- dat %>%
          tot_drinks_week = ifelse(num_alc_freq <= 7 & W1_ALC_VOL_new <= 4, W1_ALC_VOL_new * num_alc_freq, NA))
 ```
 
-4. ADL/IADL (from chloe's code): Treating response 5 (do not do activity) as missing. 
+4. ADL/IADL: Treating response 5 (do not do activity) as missing. 
    * ADL: Average ADL score for participants missing no ADL responses
    * IADL: Average IADL score for participants missing no IADL responses
    * ADL_IADL: Average ADL_IADL score for particpants missing no ADL/IADL responses
@@ -199,7 +236,7 @@ dat <- dat %>%
 ```{r iadls}  
 ##Using chloe's code
 ADL <- dat %>%
-  select(STUDYID, starts_with("W1_DAILY_LIVING_ADL")) %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING_ADL")) %>%
   mutate(ADL1 = ifelse(W1_DAILY_LIVING_ADL1 >= 1 & W1_DAILY_LIVING_ADL1 <= 4, W1_DAILY_LIVING_ADL1, NA),
          ADL2 = ifelse(W1_DAILY_LIVING_ADL2 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL2, NA),
          ADL3 = ifelse(W1_DAILY_LIVING_ADL3 >= 1 & W1_DAILY_LIVING_ADL3 <= 4, W1_DAILY_LIVING_ADL3, NA),
@@ -208,31 +245,26 @@ ADL <- dat %>%
          ADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
          ADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
          ADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
-         # The line below is incorrect - should be W1_DAILY_LIVING_ADL9 instead of W1_DAILY_LIVING_ADL2
-         # Fortnately, all participants incorrectly coded (n = 9) were missing at least one other ADL, so the ADL variable wasn't affected
-         # I've commented out the incorrect line and corrected it below, but there should be no change to the results
-         # ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA), #) %>%
-         # Corrected line
          ADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA)) %>%
   rowwise() %>%
   mutate(n_miss = sum(is.na(ADL1), is.na(ADL2), is.na(ADL3), is.na(ADL4), is.na(ADL5), is.na(ADL6), is.na(ADL7), is.na(ADL8), is.na(ADL9)),
          ADL = ifelse(n_miss == 0, sum(ADL1, ADL2, ADL3, ADL4, ADL5, ADL6, ADL7, ADL8, ADL9, na.rm = TRUE)/9, NA)) %>%
-  select(STUDYID, ADL)
+  dplyr::select(STUDYID, ADL)
 
 
 IADL <- dat %>%
-  select(STUDYID, starts_with("W1_DAILY_LIVING_IADL")) %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING_IADL")) %>%
   mutate(IADL1 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
          IADL2 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
          IADL3 = ifelse(W1_DAILY_LIVING_IADL3 >= 1 & W1_DAILY_LIVING_IADL3 <= 4, W1_DAILY_LIVING_IADL3, NA)) %>%
   rowwise() %>%
   mutate(n_miss = sum(is.na(IADL1), is.na(IADL2), is.na(IADL3)),
          IADL = ifelse(n_miss == 0, sum(IADL1, IADL2, IADL3, na.rm = TRUE)/3, NA)) %>%
-  select(STUDYID, IADL)
+  dplyr::select(STUDYID, IADL)
 
 
 ADL_IADL <- dat %>%
-  select(STUDYID, starts_with("W1_DAILY_LIVING")) %>%
+  dplyr::select(STUDYID, starts_with("W1_DAILY_LIVING")) %>%
   mutate(ADL_IADL1 = ifelse(W1_DAILY_LIVING_ADL1 >= 1 & W1_DAILY_LIVING_ADL1 <= 4, W1_DAILY_LIVING_ADL1, NA),
          ADL_IADL2 = ifelse(W1_DAILY_LIVING_ADL2 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL2, NA),
          ADL_IADL3 = ifelse(W1_DAILY_LIVING_ADL3 >= 1 & W1_DAILY_LIVING_ADL3 <= 4, W1_DAILY_LIVING_ADL3, NA),
@@ -241,9 +273,6 @@ ADL_IADL <- dat %>%
          ADL_IADL6 = ifelse(W1_DAILY_LIVING_ADL6 >= 1 & W1_DAILY_LIVING_ADL6 <= 4, W1_DAILY_LIVING_ADL6, NA),
          ADL_IADL7 = ifelse(W1_DAILY_LIVING_ADL7 >= 1 & W1_DAILY_LIVING_ADL7 <= 4, W1_DAILY_LIVING_ADL7, NA),
          ADL_IADL8 = ifelse(W1_DAILY_LIVING_ADL8 >= 1 & W1_DAILY_LIVING_ADL8 <= 4, W1_DAILY_LIVING_ADL8, NA),
-         # same error as above - will comment out incorrect line and correct below
-         # still has no effect on ADL_IADL calculation
-         # ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL2 <= 4, W1_DAILY_LIVING_ADL9, NA),
          ADL_IADL9 = ifelse(W1_DAILY_LIVING_ADL9 >= 1 & W1_DAILY_LIVING_ADL9 <= 4, W1_DAILY_LIVING_ADL9, NA),
          ADL_IADL10 = ifelse(W1_DAILY_LIVING_IADL1 >= 1 & W1_DAILY_LIVING_IADL1 <= 4, W1_DAILY_LIVING_IADL1, NA),
          ADL_IADL11 = ifelse(W1_DAILY_LIVING_IADL2 >= 1 & W1_DAILY_LIVING_IADL2 <= 4, W1_DAILY_LIVING_IADL2, NA),
@@ -255,7 +284,7 @@ ADL_IADL <- dat %>%
          ADL_IADL = ifelse(n_miss == 0, sum(ADL_IADL1, ADL_IADL2, ADL_IADL3, ADL_IADL4, ADL_IADL5, 
                                             ADL_IADL6, ADL_IADL7, ADL_IADL8, ADL_IADL9, 
                                             ADL_IADL10, ADL_IADL11, ADL_IADL12, na.rm = TRUE)/12, NA)) %>%
-  select(STUDYID, ADL_IADL)
+  dplyr::select(STUDYID, ADL_IADL)
 
 
 dat <- dat %>%
@@ -264,19 +293,42 @@ dat <- dat %>%
   inner_join(ADL_IADL, by = "STUDYID")
 ```
 
+5. Retirement status
+
+Classified as retired if they reported being retired (W1_EMP_NOTWORKING=1).
+Classified as not retired if they reporte working (W1_EMP_WORKING=1), working full-time (W1_EMP_FULLTIME) or part-time (W1_EMP_PARTTIME)
+```{r retirement status}
+dat <- dat %>%
+  mutate(retirement_stat = case_when(W1_EMP_NOTWORKING == 1 ~ "Retired",
+                                     W1_EMP_WORKING == 1 ~ "Not retired",
+                                     W1_EMP_FULLTIME == 1 ~ "Not retired",
+                                     W1_EMP_PARTTIME == 1 ~ "Not retired"))
+```
+
 ## Final dataset
 
 ```{r}
 #final datasets with variables of interest
 final_dat <- dat %>%
-  select(STUDYID,
+  dplyr::select(STUDYID,
          marital_bin,
          volunteer_bin, 
          relatives_bin,
          children_bin,
          friends_bin,
          confidante_bin,
+         W1_CONFIDANTE,
+         W1_CONFIDANTE_OFTEN,
+         confi_week_al,
+         confi_month_al,
+         confi_year_mult_al,
+         confi_year_al,
+         confi_week,
+         confi_month,
+         confi_year_mult,
+         confi_year,
          W1_INTERVIEW_AGE, 
+         W2_INTERVIEW_AGE,
          W1_EDU_new, 
          W1_D_GENDER, 
          W1_D_RACE_SUMMARY, 
@@ -288,70 +340,10 @@ final_dat <- dat %>%
          IADL,
          ADL,
          ADL_IADL,
-         execz, vrmemz, semz)%>%
+         retirement_stat,
+         execz, vrmemz, semz,
+         execz_w2, vrmemz_w2, semz_w2)%>%
   mutate_all(~replace(., . == 99 | . == 88, NA))
 
-write.csv(final_dat, "social_nets_dat.csv")
-```
-
-#Plot
-```{r}
-#making a plot of proportions of people for each race who received a score of 1 for each support measure 
-dat_plots <- final_dat %>%
-  drop_na(W1_EDU_new, income_num, ADL_IADL, tot_drinks_week)
-
-mar <- dat_plots %>%
-  group_by(W1_D_RACE_SUMMARY, "support" = marital_bin) %>%
-  tally() %>%
-  mutate(proportion = n/sum(n)) %>%
-  filter(support == 1) %>%
-  mutate(support = "marital status")
-
-vol <- dat_plots %>%
-  group_by(W1_D_RACE_SUMMARY, support = volunteer_bin) %>%
-  tally() %>%
-  mutate(proportion = n/sum(n)) %>%
-  filter(support == 1) %>%
-  mutate(support = "volunteer")
-
-rel <- dat_plots %>%
-  group_by(W1_D_RACE_SUMMARY, support = relatives_bin) %>%
-  tally() %>%
-  mutate(proportion = n/sum(n)) %>%
-  filter(support == 1) %>%
-  mutate(support = "relatives")
-
-child <- dat_plots %>%
-  group_by(W1_D_RACE_SUMMARY, support = children_bin) %>%
-  tally() %>%
-  mutate(proportion = n/sum(n)) %>%
-  filter(support == 1) %>%
-  mutate(support = "children")
-
-friends <- dat_plots %>%
-  group_by(W1_D_RACE_SUMMARY, support = friends_bin) %>%
-  tally() %>%
-  mutate(proportion = n/sum(n)) %>%
-  filter(support == 1) %>%
-  mutate(support = "friends")
-
-conf <- dat_plots %>%
-  group_by(W1_D_RACE_SUMMARY, support = confidante_bin) %>%
-  tally() %>%
-  mutate(proportion = n/sum(n)) %>%
-  filter(support == 1) %>%
-  mutate(support = "confidante")
-
-dat_plots2 <- rbind(mar, vol, rel, child, friends, conf)
-  
-png("social_nets_plot.png", units="in", width=6, height=5, res = 300)
-ggplot(dat_plots2, aes(x = support, y = proportion, fill = W1_D_RACE_SUMMARY))+
-  geom_col(width = 0.7, position = position_dodge(width = 0.7))+
-  theme_minimal()+
-  xlab("Measure of support")+
-  ylab("Proportion")+
-  labs(fill='Race')+
-  scale_fill_brewer(palette="RdYlBu")
-
-dev.off()
+write.csv(final_dat, "social_nets_dat_both_waves.csv")
 ```
